@@ -1,98 +1,79 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import React from "react";
+import { View, Text } from "@/src/tw";
+import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/src/store/useAuthStore";
+import { ScrollView } from "@/src/tw";
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { user, logout, isLoading } = useAuthStore();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <ScrollView 
+      className="flex-grow bg-background"
+      contentContainerClassName="flex-grow px-6 py-12 justify-center"
+    >
+      <View className="gap-8 max-w-md w-full self-center">
+        {/* Header Block */}
+        <View className="items-center gap-2">
+          <View className="w-20 h-20 bg-primary rounded-full items-center justify-center">
+            <Text className="text-display-medium text-on-primary font-bold">
+              {user?.fullName?.charAt(0) || "U"}
+            </Text>
+          </View>
+          <Text className="text-headline-large text-on-background font-bold tracking-tight mt-2">
+            Welcome Back!
+          </Text>
+          <Text className="text-body-large text-on-surface-variant text-center">
+            Logged in as <Text className="font-semibold text-on-background">{user?.fullName}</Text>
+          </Text>
+        </View>
+
+        {/* Profile Card */}
+        <View className="bg-surface border border-outline rounded-3xl p-6 gap-4">
+          <Text className="text-title-large text-on-surface font-bold border-b border-outline pb-2">
+            Account Profile
+          </Text>
+
+          <View className="flex-row justify-between items-center">
+            <Text className="text-body-medium text-on-surface-variant">Email</Text>
+            <Text className="text-body-medium text-on-surface font-medium">{user?.email}</Text>
+          </View>
+
+          <View className="flex-row justify-between items-center">
+            <Text className="text-body-medium text-on-surface-variant">User Role</Text>
+            <View className="bg-secondary px-3 py-1 rounded-full border border-outline">
+              <Text className="text-label-medium text-on-secondary font-bold capitalize">
+                {user?.role}
+              </Text>
+            </View>
+          </View>
+
+          <View className="flex-row justify-between items-center">
+            <Text className="text-body-medium text-on-surface-variant">Verification Status</Text>
+            <View 
+              className={`px-3 py-1 rounded-full ${
+                user?.isVerified ? "bg-success" : "bg-warning"
+              }`}
+            >
+              <Text className="text-label-medium text-on-primary font-bold">
+                {user?.isVerified ? "Verified" : "Pending Verification"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Action Button */}
+        <View className="mt-4">
+          <Button
+            label="Log Out"
+            onPress={logout}
+            loading={isLoading}
+            variant="secondary"
+            className="w-full border-error active:bg-error/10"
+            textClassName="text-error"
+          />
+        </View>
+      </View>
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
