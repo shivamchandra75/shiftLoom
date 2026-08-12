@@ -1,0 +1,143 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+
+/* Platform-specific font families */
+@media android {
+  :root {
+    --font-mono: monospace;
+    --font-rounded: normal;
+    --font-serif: serif;
+    --font-sans: normal;
+  }
+}
+
+@media ios {
+  :root {
+    --font-mono: ui-monospace;
+    --font-serif: ui-serif;
+    --font-sans: system-ui;
+    --font-rounded: ui-rounded;
+  }
+}
+
+:root {
+  /* Core Brand Colors */
+  --primary: light-dark(#0B57D0, #A8C7FA);
+  --on-primary: light-dark(#FFFFFF, #041E49);
+  
+  --secondary: light-dark(#F0F4F9, #282A2C);
+  --on-secondary: light-dark(#0B57D0, #A8C7FA);
+
+  /* Backgrounds & Surfaces */
+  --background: light-dark(#FFFFFF, #121212);
+  --on-background: light-dark(#1F1F1F, #E3E2E6);
+  
+  --surface: light-dark(#FFFFFF, #282A2C);
+  --on-surface: light-dark(#1F1F1F, #E3E2E6);
+  
+  --surface-variant: light-dark(#F0F4F9, #1E1F22);
+  --on-surface-variant: light-dark(#444746, #C4C7C5);
+
+  --outline: light-dark(#E3E3E3, #3E3F40);
+  --outline-variant: light-dark(#747775, #8E918F);
+
+  /* Status Colors */
+  --success: light-dark(#146C2E, #81C995);
+  --on-success: light-dark(#FFFFFF, #041E49);
+
+  --warning: light-dark(#B26A00, #FDD663);
+  --on-warning: light-dark(#FFFFFF, #041E49);
+
+  --error: light-dark(#B3261E, #F2B8B5);
+  --on-error: light-dark(#FFFFFF, #041E49);
+
+  /* Brand Accents */
+  --brand-blue: #3A81F1;
+  --brand-green: #2DA94F;
+  --brand-yellow: #FDBD00;
+  --brand-red: #EA4335;
+}
+
+@layer theme {
+  @theme {
+    /* Theme color registration (Industry Standard Naming) */
+    --color-primary: var(--primary);
+    --color-on-primary: var(--on-primary);
+    
+    --color-secondary: var(--secondary);
+    --color-on-secondary: var(--on-secondary);
+    
+    --color-background: var(--background);
+    --color-on-background: var(--on-background);
+    
+    --color-surface: var(--surface);
+    --color-on-surface: var(--on-surface);
+    
+    --color-surface-variant: var(--surface-variant);
+    --color-on-surface-variant: var(--on-surface-variant);
+    
+    --color-outline: var(--outline);
+    --color-outline-variant: var(--outline-variant);
+    
+    --color-success: var(--success);
+    --color-on-success: var(--on-success);
+    
+    --color-warning: var(--warning);
+    --color-on-warning: var(--on-warning);
+    
+    --color-error: var(--error);
+    --color-on-error: var(--on-error);
+
+    --color-brand-blue: var(--brand-blue);
+    --color-brand-green: var(--brand-green);
+    --color-brand-yellow: var(--brand-yellow);
+    --color-brand-red: var(--brand-red);
+
+    /* Google Material 3 Font Size Scale */
+    --text-display-large: 57px;
+    --text-display-large--line-height: 64px;
+    
+    --text-display-medium: 45px;
+    --text-display-medium--line-height: 52px;
+    
+    --text-display-small: 36px;
+    --text-display-small--line-height: 44px;
+    
+    --text-headline-large: 32px;
+    --text-headline-large--line-height: 40px;
+    
+    --text-headline-medium: 28px;
+    --text-headline-medium--line-height: 36px;
+    
+    --text-headline-small: 24px;
+    --text-headline-small--line-height: 32px;
+
+    --text-title-large: 22px;
+    --text-title-large--line-height: 28px;
+    
+    --text-title-medium: 16px;
+    --text-title-medium--line-height: 24px;
+    
+    --text-title-small: 14px;
+    --text-title-small--line-height: 20px;
+    
+    --text-label-large: 14px;
+    --text-label-large--line-height: 20px;
+    
+    --text-label-medium: 12px;
+    --text-label-medium--line-height: 16px;
+    
+    --text-label-small: 11px;
+    --text-label-small--line-height: 16px;
+    
+    --text-body-large: 16px;
+    --text-body-large--line-height: 24px;
+    
+    --text-body-medium: 14px;
+    --text-body-medium--line-height: 20px;
+    
+    --text-body-small: 12px;
+    --text-body-small--line-height: 16px;
+  }
+}
