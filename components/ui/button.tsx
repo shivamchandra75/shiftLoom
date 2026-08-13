@@ -1,6 +1,5 @@
 import React from "react";
-import { Pressable, Text } from "@/src/tw";
-import { ActivityIndicator } from "react-native";
+import { Pressable, Text, ActivityIndicator } from "react-native";
 
 interface ButtonProps {
   label: string;
@@ -24,14 +23,16 @@ export function Button({
   const isPrimary = variant === "primary";
   
   // M3 styling classes
-  const baseButtonClass = "rounded-full py-4 px-6 items-center justify-center flex-row min-h-[52px]";
+  const baseButtonClass = "rounded-full py-2 px-6 items-center justify-center flex-row min-h-[52px]";
   const primaryButtonClass = isPrimary
     ? "bg-primary active:bg-primary/90"
-    : "bg-secondary active:bg-secondary/90 border border-outline";
+    : "active:bg-secondary/90 border border-outline";
   
   const disabledClass = disabled || loading ? "opacity-50" : "";
   
-  const baseTextClass = "text-label-large font-bold tracking-wider";
+  // Use text-lg instead of custom text-label-large to avoid prefix conflicts with text-on-primary
+  // Removed tracking-wider because 'em' units can cause text rendering corruption on Android
+  const baseTextClass = "text-lg font-bold";
   const primaryTextClass = isPrimary ? "text-on-primary" : "text-on-secondary";
 
   return (

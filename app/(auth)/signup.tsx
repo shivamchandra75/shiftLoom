@@ -1,26 +1,37 @@
 import React, { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text  } from "react-native";
 import { OutlinedInput } from "@/components/ui/outlined-input";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/button";
 import { useAuthStore } from "@/src/store/useAuthStore";
+import {KeyboardAwareScrollView} from "react-native-keyboard-aware-scroll-view"
 
 import { useRouter } from "expo-router";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-export default function LoginScreen() {
-  const { login, loginWithOTP, error, isLoading, setError } = useAuthStore();
-  const [isOTPMode, setIsOTPMode] = useState(false);
+export default function SignupScreen() {
+  const { signup, error, isLoading, setError } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const router = useRouter();
 
-  const handleLogin = async () => {
+  const handleSignup = async () => {
     setError(null);
-    let success = false;
-    if (isOTPMode) {
-      success = await loginWithOTP(email);
-    } else {
-      success = await login(email, password);
+    if (!email || !password || !confirmPassword) {
+      setError("All fields are required.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    const success = await signup(email, password);
+    if (success) {
+      // Upon successful signup:
+      // If email confirmation is disabled in Supabase, the user is auto-logged in,
+      // and RootLayout's NavigationGuard automatically redirects to tabs/onboarding.
+      // If email confirmation is enabled, we notify them.
+      alert("Account created successfully! Please verify your email if confirmation is required.");
     }
   };
 
@@ -32,18 +43,20 @@ export default function LoginScreen() {
       enableOnAndroid={true}
     >
       <View className="gap-8 max-w-md w-full self-center">
+        {/* Header */}
         <View className="items-center gap-3">
           <View className="w-16 h-16 bg-primary rounded-3xl items-center justify-center">
             <Text className="text-display-small text-on-primary font-bold">SL</Text>
           </View>
           <Text className="text-headline-large text-on-background font-bold tracking-tight">
-            ShiftLoom
+            Create Account
           </Text>
           <Text className="text-body-medium text-on-surface-variant text-center px-4">
-            Configure your shifts and manage workers easily
+            Join ShiftLoom to find shifts and manage your schedule
           </Text>
         </View>
 
+        {/* Form */}
         <View className="gap-4">
           <OutlinedInput
             label="Email Address"
@@ -56,20 +69,29 @@ export default function LoginScreen() {
             keyboardType="email-address"
           />
 
-          {!isOTPMode && (
-            <OutlinedInput
-              label="Password"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setError(null);
-              }}
-              placeholder="Enter your password"
-              secureTextEntry
-            />
-          )}
+          <OutlinedInput
+            label="Password"
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text);
+              setError(null);
+            }}
+            placeholder="Create a password"
+            secureTextEntry
+          />
 
-          {/* Error Message Display */}
+          <OutlinedInput
+            label="Confirm Password"
+            value={confirmPassword}
+            onChangeText={(text) => {
+              setConfirmPassword(text);
+              setError(null);
+            }}
+            placeholder="Confirm your password"
+            secureTextEntry
+          />
+
+          {/* Error Message */}
           {error ? (
             <Text className="text-label-medium text-error text-center mt-1 px-2 font-medium">
               {error}
@@ -77,36 +99,24 @@ export default function LoginScreen() {
           ) : null}
         </View>
 
+        {/* Actions */}
         <View className="gap-3 mt-2">
           <PrimaryButton
-            label={isOTPMode ? "Send OTP" : "Log In"}
-            onPress={handleLogin}
+            label="Sign Up"
+            onPress={handleSignup}
             loading={isLoading}
           />
 
           <SecondaryButton
-            label={isOTPMode ? "Use Password Login" : "Log In with Email OTP"}
+            label="Already have an account? Log In"
             onPress={() => {
-              setIsOTPMode(!isOTPMode);
               setError(null);
+              router.replace("/(auth)/login");
             }}
           />
-
-          <Pressable
-            onPress={() => {
-              setError(null);
-              router.replace("/(auth)/signup");
-            }}
-            className="items-center mt-2"
-          >
-            <Text className="text-body-medium text-primary font-bold">
-              Don't have an account? Sign Up
-            </Text>
-          </Pressable>
         </View>
-
       </View>
-    </KeyboardAwareScrollView>
 
+    </KeyboardAwareScrollView>
   );
 }

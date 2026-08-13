@@ -1,8 +1,8 @@
 import React from "react";
-import { View, Text } from "@/src/tw";
+import { View, Text, ScrollView } from "react-native";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/src/store/useAuthStore";
-import { ScrollView } from "@/src/tw";
+
 
 export default function HomeScreen() {
   const { user, logout, isLoading } = useAuthStore();
@@ -17,14 +17,14 @@ export default function HomeScreen() {
         <View className="items-center gap-2">
           <View className="w-20 h-20 bg-primary rounded-full items-center justify-center">
             <Text className="text-display-medium text-on-primary font-bold">
-              {user?.fullName?.charAt(0) || "U"}
+              {user?.firstName?.charAt(0) || "U"}
             </Text>
           </View>
           <Text className="text-headline-large text-on-background font-bold tracking-tight mt-2">
             Welcome Back!
           </Text>
           <Text className="text-body-large text-on-surface-variant text-center">
-            Logged in as <Text className="font-semibold text-on-background">{user?.fullName}</Text>
+            Logged in as <Text className="font-semibold text-on-background">{user?.firstName} {user?.lastName}</Text>
           </Text>
         </View>
 

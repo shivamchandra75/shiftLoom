@@ -1,61 +1,150 @@
 import { create } from "zustand";
-
-export interface UserProfile {
-  id: string;
-  email: string;
-  role: "admin" | "user";
-  isVerified: boolean;
-  fullName: string;
-}
+import { supabase } from "@/src/lib/supabase";
+import { fetchUser, User } from "@/src/services/userService";
 
 interface AuthState {
-  user: UserProfile | null;
+  user: User | null;
   session: any | null;
   isLoading: boolean;
   isInitialized: boolean;
   error: string | null;
+  initialize: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
+  signup: (email: string, password: string) => Promise<boolean>;
   loginWithOTP: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  setUser: (user: UserProfile | null) => void;
-  setInitialized: (initialized: boolean) => void;
+  setUser: (user: User | null) => void;
   setError: (error: string | null) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   session: null,
   isLoading: false,
   isInitialized: false,
   error: null,
 
+  initialize: async () => {
+    if (get().isInitialized) return;
+
+    try {
+      // 1. Check current active session
+      const { data: { session } } = await supabase.auth.getSession();
+      set({ session });
+
+      if (session?.user) {
+        const dbUser = await fetchUser(session.user.id);
+        set({
+          user: dbUser || {
+            id: session.user.id,
+            email: session.user.email || "",
+            role: null,
+            isVerified: false,
+            firstName: "",
+            lastName: "",
+          },
+        });
+      }
+
+      // 2. Listen to real-time auth state events
+      supabase.auth.onAuthStateChange(async (_event, session) => {
+        set({ session });
+        if (session?.user) {
+          try {
+            const dbUser = await fetchUser(session.user.id);
+            set({
+              user: dbUser || {
+                id: session.user.id,
+                email: session.user.email || "",
+                role: null,
+                isVerified: false,
+                firstName: "",
+                lastName: "",
+              },
+            });
+          } catch (err) {
+            console.error("Error fetching user profile on auth change:", err);
+          }
+        } else {
+          set({ user: null });
+        }
+      });
+
+      set({ isInitialized: true });
+    } catch (err: any) {
+      console.error("Error during Supabase auth initialization:", err);
+      set({ isInitialized: true });
+    }
+  },
+
   login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
-      // Basic client-side validation to mimic standard login errors
       if (!email || !password) {
         throw new Error("Email and password are required.");
       }
-      
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Mock user generation
-      // If email has 'admin', log in as admin, otherwise standard user
-      const isAdmin = email.toLowerCase().includes("admin");
-      
-      const mockUser: UserProfile = {
-        id: isAdmin ? "admin-123" : "user-456",
-        email: email.toLowerCase(),
-        role: isAdmin ? "admin" : "user",
-        isVerified: isAdmin, // Admins verified by default
-        fullName: isAdmin ? "Admin Manager" : "Shift Worker",
-      };
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      set({ user: mockUser, isLoading: false, isInitialized: true });
-      return true;
+      if (error) throw error;
+
+      if (data.user) {
+        const dbUser = await fetchUser(data.user.id);
+        set({
+          user: dbUser || {
+            id: data.user.id,
+            email: data.user.email || "",
+            role: null,
+            isVerified: false,
+            firstName: "",
+            lastName: "",
+          },
+          isLoading: false,
+        });
+        return true;
+      }
+      return false;
     } catch (err: any) {
       set({ error: err.message || "Failed to authenticate.", isLoading: false });
+      return false;
+    }
+  },
+
+  signup: async (email, password) => {
+    set({ isLoading: true, error: null });
+    try {
+      if (!email || !password) {
+        throw new Error("Email and password are required.");
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        const dbUser = await fetchUser(data.user.id);
+        set({
+          user: dbUser || {
+            id: data.user.id,
+            email: data.user.email || "",
+            role: null,
+            isVerified: false,
+            firstName: "",
+            lastName: "",
+          },
+          isLoading: false,
+        });
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      set({ error: err.message || "Failed to create account.", isLoading: false });
       return false;
     }
   },
@@ -67,19 +156,16 @@ export const useAuthStore = create<AuthState>((set) => ({
         throw new Error("Email is required for OTP login.");
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
 
-      const isAdmin = email.toLowerCase().includes("admin");
+      if (error) throw error;
 
-      const mockUser: UserProfile = {
-        id: isAdmin ? "admin-otp" : "user-otp",
-        email: email.toLowerCase(),
-        role: isAdmin ? "admin" : "user",
-        isVerified: isAdmin,
-        fullName: isAdmin ? "OTP Admin" : "OTP Worker",
-      };
-
-      set({ user: mockUser, isLoading: false, isInitialized: true });
+      set({ isLoading: false });
       return true;
     } catch (err: any) {
       set({ error: err.message || "OTP request failed.", isLoading: false });
@@ -89,11 +175,16 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     set({ isLoading: true });
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    set({ user: null, session: null, error: null, isLoading: false });
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      set({ user: null, session: null, error: null, isLoading: false });
+    } catch (err: any) {
+      console.error("Logout failed:", err);
+      set({ isLoading: false });
+    }
   },
 
   setUser: (user) => set({ user }),
-  setInitialized: (initialized) => set({ isInitialized: initialized }),
   setError: (error) => set({ error }),
 }));

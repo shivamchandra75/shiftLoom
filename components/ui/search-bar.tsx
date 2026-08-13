@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { View, TextInput, Pressable } from "@/src/tw";
+import { View, TextInput, Pressable } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 interface SearchBarProps {

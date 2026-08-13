@@ -18,15 +18,16 @@ function NavigationGuard() {
   const router = useRouter();
 
   useEffect(() => {
-    // Determine if user is in auth screens
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!user && !inAuthGroup) {
-      // Not logged in -> redirect to login
       router.replace('/(auth)/login');
     } else if (user && inAuthGroup) {
-      // Logged in -> redirect to main app tabs
-      router.replace('/(tabs)');
+      if(!user.firstName || !user.role ) {
+        router.push('/(user)/onboarding');
+      }else {
+        router.replace('/(tabs)');
+      }
     }
   }, [user, segments]);
 
@@ -35,6 +36,15 @@ function NavigationGuard() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const { initialize, isInitialized } = useAuthStore();
+
+  useEffect(() => {
+    initialize();
+  }, []);
+
+  if (!isInitialized) {
+    return null; // Return null (or splash screen) during initial session check
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
