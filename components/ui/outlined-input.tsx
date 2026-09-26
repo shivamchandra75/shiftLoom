@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput } from "@/src/tw";
+import { View, Text, TextInput } from "react-native";
 
 interface OutlinedInputProps {
   label: string;

@@ -1,0 +1,48 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  // NOTE: Update this to include the paths to all of your component files.
+  content: ["./app/**/*.{js,jsx,ts,tsx}", "./components/**/*.{js,jsx,ts,tsx}"],
+  presets: [require("nativewind/preset")],
+  theme: {
+    extend: {
+      colors: {
+        primary: "#0B57D0",
+        "on-primary": "#FFFFFF",
+        secondary: "#F0F4F9",
+        "on-secondary": "#0B57D0",
+        background: "#FFFFFF",
+        "on-background": "#1F1F1F",
+        surface: "#FFFFFF",
+        "on-surface": "#1F1F1F",
+        "surface-variant": "#F0F4F9",
+        "on-surface-variant": "#444746",
+        outline: "#E3E3E3",
+        "outline-variant": "#747775",
+        success: "#146C2E",
+        "on-success": "#FFFFFF",
+        warning: "#B26A00",
+        "on-warning": "#FFFFFF",
+        error: "#B3261E",
+        "on-error": "#FFFFFF",
+      },
+      fontSize: {
+        "display-large": ["57px", { lineHeight: "64px" }],
+        "display-medium": ["45px", { lineHeight: "52px" }],
+        "display-small": ["36px", { lineHeight: "44px" }],
+        "headline-large": ["32px", { lineHeight: "40px" }],
+        "headline-medium": ["28px", { lineHeight: "36px" }],
+        "headline-small": ["24px", { lineHeight: "32px" }],
+        "title-large": ["22px", { lineHeight: "28px" }],
+        "title-medium": ["16px", { lineHeight: "24px" }],
+        "title-small": ["14px", { lineHeight: "20px" }],
+        "label-large": ["14px", { lineHeight: "20px" }],
+        "label-medium": ["12px", { lineHeight: "16px" }],
+        "label-small": ["11px", { lineHeight: "16px" }],
+        "body-large": ["16px", { lineHeight: "24px" }],
+        "body-medium": ["14px", { lineHeight: "20px" }],
+        "body-small": ["12px", { lineHeight: "16px" }],
+      },
+    },
+  },
+  plugins: [],
+};
