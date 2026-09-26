@@ -19,15 +19,15 @@ function NavigationGuard() {
 
   useEffect(() => {
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboarding = segments[1] === 'onboarding';
+    const inAppGroup = segments[0] === '(tabs)'
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (user && inAuthGroup) {
-      if(!user.firstName || !user.role ) {
-        router.push('/(user)/onboarding');
-      }else {
-        router.replace('/(tabs)');
-      }
+    } else if (user && ( !user.role || !user?.firstName ) && !inOnboarding) {
+      router.replace('/(user)/onboarding');
+    }else if(user && user.role && user.firstName && !inAppGroup){
+      router.replace('/(tabs)')
     }
   }, [user, segments]);
 

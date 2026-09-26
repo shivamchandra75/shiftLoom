@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/src/lib/supabase";
-import { fetchUser, User } from "@/src/services/userService";
+import { fetchUser, UpdateProfileInput, updateUser, User } from "@/src/services/userService";
 
 interface AuthState {
   user: User | null;
@@ -13,6 +13,7 @@ interface AuthState {
   signup: (email: string, password: string) => Promise<boolean>;
   loginWithOTP: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  updateUserProfile: (updates: Partial<User>) => Promise<boolean>;
   setUser: (user: User | null) => void;
   setError: (error: string | null) => void;
 }
@@ -111,6 +112,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ error: err.message || "Failed to authenticate.", isLoading: false });
       return false;
     }
+  },
+
+  updateUserProfile: async (updates:UpdateProfileInput) => {
+    const currentUser = get().user;
+
+    console.log('step 1');
+    if (!currentUser?.id) {
+      set({ error: "No user is logged in" });
+      return false;
+    }
+    console.log('user id: ', currentUser?.id);
+
+    set({ isLoading: true, error: null });
+
+    try{
+      console.log('loading');
+      await updateUser(currentUser.id, updates);
+
+      console.log('sent to supabase success');
+
+      const dbUser = await fetchUser(currentUser.id);
+      console.log('fetching user', dbUser);
+      set({user: dbUser, isLoading: false});
+      return true;
+    } catch (err: any) {
+      set({ error: err.message || "Failed to create account.", isLoading: false });
+      return false;
+    }
+
   },
 
   signup: async (email, password) => {

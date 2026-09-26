@@ -1,9 +1,11 @@
 import { supabase } from "@/src/lib/supabase";
 
+export type UpdateProfileInput = Partial<Pick<User, 'firstName' | 'lastName' | 'role'>>;
+
 export interface User {
   id: string;
   email: string;
-  role: "admin" | "user" | null;
+  role: "steward" | "chef" | "driver" | null;
   isVerified: boolean;
   firstName: string;
   lastName: string;
@@ -36,4 +38,19 @@ export async function fetchUser(userId: string): Promise<User | null> {
     firstName: dbUser.first_name || "",
     lastName: dbUser.last_name || "",
   };
+}
+
+export async function updateUser(userId: string, updates:UpdateProfileInput){
+  if(!updates) { throw new Error("Missing updates or user id"); }
+
+  console.log('updates', updates);
+  const formattedUpdates: Record<string, any> = {};
+
+  if (updates.firstName !== undefined) formattedUpdates.first_name = updates.firstName;
+  if (updates.lastName !== undefined) formattedUpdates.last_name = updates.lastName;
+  if (updates.role !== undefined) formattedUpdates.role = updates.role;
+
+  const { error }= await supabase.from('users').update(formattedUpdates).eq('id', userId);
+  console.log('error', error);
+  if (error) throw error;
 }
