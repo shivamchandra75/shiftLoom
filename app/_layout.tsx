@@ -20,7 +20,7 @@ function NavigationGuard() {
   useEffect(() => {
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[1] === 'onboarding';
-    const inAppGroup = segments[0] === '(tabs)'
+    const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'job';
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/login');
@@ -53,6 +53,12 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen name="job/[id]"
+          options={{
+            headerShown: true,
+            title: "Shift Details"
+          }}
+        />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

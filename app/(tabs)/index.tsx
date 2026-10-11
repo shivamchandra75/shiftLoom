@@ -1,11 +1,22 @@
-import React from "react";
-import { View, Text, ScrollView } from "react-native";
-import { Button } from "@/components/ui/button";
+import React, { useEffect } from "react";
+import { View, Text, ScrollView, FlatList } from "react-native";
 import { useAuthStore } from "@/src/store/useAuthStore";
+import { JobCard } from "@/components/JobCard";
+import { useJobStore } from "@/src/store/useJobStore";
+import { useRouter } from "expo-router";
+import { getFormattedDate } from "@/src/lib/utils";
 
 
 export default function HomeScreen() {
-  const { user, logout, isLoading } = useAuthStore();
+  const { user } = useAuthStore();
+  const {getJobs, isLoading:isJobLoading, jobList} = useJobStore();
+  const router = useRouter();
+
+  // console.log(jobList?.[0]);
+
+  useEffect(() => {
+    if(user?.role) getJobs(user.role);
+  },[]);
 
   return (
     <ScrollView 
@@ -13,22 +24,6 @@ export default function HomeScreen() {
       contentContainerClassName="flex-grow px-6 py-12 justify-center"
     >
       <View className="gap-8 max-w-md w-full self-center">
-        {/* Header Block */}
-        <View className="items-center gap-2">
-          <View className="w-20 h-20 bg-primary rounded-full items-center justify-center">
-            <Text className="text-display-medium text-on-primary font-bold">
-              {user?.firstName?.charAt(0) || "U"}
-            </Text>
-          </View>
-          <Text className="text-headline-large text-on-background font-bold tracking-tight mt-2">
-            Welcome Back!
-          </Text>
-          <Text className="text-body-large text-on-surface-variant text-center">
-            Logged in as <Text className="font-semibold text-on-background">{user?.firstName} {user?.lastName}</Text>
-          </Text>
-        </View>
-
-        {/* Profile Card */}
         <View className="bg-surface border border-outline rounded-3xl p-6 gap-4">
           <Text className="text-title-large text-on-surface font-bold border-b border-outline pb-2">
             Account Profile
@@ -36,7 +31,7 @@ export default function HomeScreen() {
 
           <View className="flex-row justify-between items-center">
             <Text className="text-body-medium text-on-surface-variant">Email</Text>
-            <Text className="text-body-medium text-on-surface font-medium">{user?.email}</Text>
+            <Text className="text-body-medium text-on-surface font-medium">{user?.firstName}</Text>
           </View>
 
           <View className="flex-row justify-between items-center">
@@ -56,21 +51,31 @@ export default function HomeScreen() {
               }`}
             >
               <Text className="text-label-medium text-on-primary font-bold">
-                {user?.isVerified ? "Verified" : "Pending Verification"}
+                {user?.isVerified ? "Verified" : "Pending"}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Action Button */}
-        <View className="mt-4">
-          <Button
-            label="Log Out"
-            onPress={logout}
-            loading={isLoading}
-            variant="secondary"
-            className="w-full border-error active:bg-error/10"
-            textClassName="text-error"
+        {/* Available Shifts Section */}
+        <View className="gap-4">
+          <Text className="text-title-medium text-on-surface font-bold">
+            Available Shifts
+          </Text>
+          <FlatList
+            data={jobList}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <JobCard
+                companyName={item.companyName}
+                location={item.locationAddress}
+                createdAt={getFormattedDate( item.createdAt )}
+                wage={item?.jobRoles?.[0].wageInr}
+                onPress={() => router.push({ pathname: '/job/[id]', params: { id: item.id } })}
+                className="mb-3"
+              />
+            )}
+            scrollEnabled={false}
           />
         </View>
       </View>

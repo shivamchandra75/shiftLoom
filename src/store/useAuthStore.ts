@@ -117,23 +117,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateUserProfile: async (updates:UpdateProfileInput) => {
     const currentUser = get().user;
 
-    console.log('step 1');
     if (!currentUser?.id) {
       set({ error: "No user is logged in" });
       return false;
     }
-    console.log('user id: ', currentUser?.id);
 
     set({ isLoading: true, error: null });
 
     try{
-      console.log('loading');
       await updateUser(currentUser.id, updates);
 
-      console.log('sent to supabase success');
 
       const dbUser = await fetchUser(currentUser.id);
-      console.log('fetching user', dbUser);
       set({user: dbUser, isLoading: false});
       return true;
     } catch (err: any) {
