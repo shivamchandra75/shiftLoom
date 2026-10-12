@@ -4,6 +4,7 @@ export interface UserJob {
   applicationId: string;
   status: string;
   role: string;
+  cancelReason?: string | null;
   job: Job;
 }
 
@@ -84,6 +85,7 @@ export async function fetchUserJobs(currentUserId: string): Promise<UserJob[]>{
       id,
       status,
       role,
+      cancel_reason,
       jobs (*, job_roles (*))
     `)
     .eq("user_id", currentUserId);
@@ -97,6 +99,7 @@ export async function fetchUserJobs(currentUserId: string): Promise<UserJob[]>{
     applicationId: row.id,
     status: row.status,
     role: row.role,
+    cancelReason: row.cancel_reason ?? null,
     job: formatDbJob(row.jobs)
   }));
 }
@@ -159,3 +162,21 @@ export async function unsaveJob(jobId: string, userId: string): Promise<void> {
 
   if (error) throw error;
 }
+
+export async function cancelJobApplication(jobId: string, userId: string, reason: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("user_jobs")
+    .update({ 
+      status: "cancelled_by_user",
+      cancel_reason: reason 
+    })
+    .eq("job_id", jobId)
+    .eq("user_id", userId)
+    .select();
+
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("Failed to cancel: no matching shift application found or RLS policy blocked the update.");
+  }
+}
+

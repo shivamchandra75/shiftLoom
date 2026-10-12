@@ -3,6 +3,7 @@ import {
   fetchJobs, 
   fetchUserJobs, 
   applyForJob, 
+  cancelJobApplication,
   fetchSavedJobs, 
   saveJob, 
   unsaveJob, 
@@ -19,10 +20,12 @@ interface JobState {
   savedJobIds: string[];
   isLoading: boolean;
   isApplying: boolean;
+  isCancelling: boolean;
   error: string | null;
   getJobs: (role?:JobRole['role']) => Promise<void>;
   getUserJobs: (id: string) => Promise<void>;
   applyJob: (jobId: string, userId: string, role: string) => Promise<void>;
+  cancelJob: (jobId: string, userId: string, reason: string) => Promise<void>;
   getSavedJobs: (userId: string) => Promise<void>;
   toggleSaveJob: (job: Job, userId: string) => Promise<void>;
 }
@@ -34,6 +37,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   savedJobIds: [],
   isLoading: false,
   isApplying: false,
+  isCancelling: false,
   error: null,
   getJobs: async (role) => {
     set({ isLoading: true, error: null });
@@ -72,6 +76,19 @@ export const useJobStore = create<JobState>((set, get) => ({
       console.error(error);
       set({ error: error?.message || "Failed to apply for job", isApplying: false });
       throw error; // Re-throw so the UI can catch it and show an alert
+    }
+  },
+  cancelJob: async (jobId, userId, reason) => {
+    set({ isCancelling: true, error: null });
+    try {
+      await cancelJobApplication(jobId, userId, reason);
+      await get().getUserJobs(userId);
+      set({ isCancelling: false });
+      console.log("❌ cancelled this job with reason:", reason);
+    } catch (error: any) {
+      console.error(error);
+      set({ error: error?.message || "Failed to cancel shift", isCancelling: false });
+      throw error;
     }
   },
   getSavedJobs: async (userId) => {

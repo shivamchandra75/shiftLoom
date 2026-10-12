@@ -17,7 +17,7 @@ export default function MyShiftsScreen() {
     }
   }, [user?.id]);
 
-  console.log('✅ my shift',userJobList?.[0]);
+  console.log('✅ my shift',userJobList?.[1]);
 
   if (isLoading && userJobList.length === 0) {
     return (
