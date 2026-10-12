@@ -32,10 +32,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="notifications"
+        name="saved"
         options={{
-          title: 'Notifications',
-          tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons size={24} name={focused ? "bell" : "bell-outline"} color={color} />,
+          headerShown: true,
+          title: 'Saved',
+          tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons size={24} name={focused ? "bookmark" : "bookmark-outline"} color={color} />,
         }}
       />
       <Tabs.Screen

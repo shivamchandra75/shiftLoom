@@ -118,3 +118,44 @@ export async function applyForJob(jobId: string, userId: string, role: string): 
     throw error;
   }
 }
+
+export async function fetchSavedJobs(userId: string): Promise<Job[]> {
+  const { data, error } = await supabase
+    .from("saved_jobs")
+    .select(`
+      id,
+      jobs (*, job_roles (*))
+    `)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  if (!data) return [];
+
+  return data
+    .filter((row: any) => row.jobs)
+    .map((row: any) => formatDbJob(row.jobs));
+}
+
+export async function saveJob(jobId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("saved_jobs")
+    .insert({
+      job_id: jobId,
+      user_id: userId,
+    });
+
+  if (error && error.code !== '23505') {
+    throw error;
+  }
+}
+
+export async function unsaveJob(jobId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("saved_jobs")
+    .delete()
+    .eq("job_id", jobId)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}
