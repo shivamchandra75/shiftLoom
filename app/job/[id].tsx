@@ -52,7 +52,7 @@ export default function JobDetailScreen() {
   const [otherReasonText, setOtherReasonText] = useState<string>("");
 
   const job = jobList.find(j => j.id === id);
-  const userApplication = userJobList.find(uj => uj.job.id === id);
+  const userApplication = userJobList.find(uj => uj?.job?.id === id);
   const isAccepted = userApplication?.status === 'accepted';
   const isCancelled = userApplication?.status === 'cancelled_by_user';
   const isSaved = job ? savedJobIds.includes(job.id) : false;

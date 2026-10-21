@@ -34,27 +34,48 @@ export interface Job {
 }
 
 export function formatDbJob(dbJob: any): Job {
+  if (!dbJob) {
+    return {
+      id: "",
+      companyName: "Unknown Company",
+      locationAddress: "Location unavailable",
+      latitude: null,
+      longitude: null,
+      date: "",
+      startTime: "",
+      endTime: "",
+      status: null,
+      cancelReason: null,
+      createdBy: null,
+      createdAt: "",
+      updatedAt: "",
+      jobRoles: [],
+    };
+  }
+
   return {
-    id: dbJob.id,
-    companyName: dbJob.company_name,
-    locationAddress: dbJob.location_address,
+    id: dbJob.id || "",
+    companyName: dbJob.company_name || "Unknown Company",
+    locationAddress: dbJob.location_address || "Location unavailable",
     latitude: dbJob.latitude ?? null,
     longitude: dbJob.longitude ?? null,
-    date: dbJob.job_date,
-    startTime: dbJob.start_time,
-    endTime: dbJob.end_time,
-    status: dbJob.status,
+    date: dbJob.job_date || "",
+    startTime: dbJob.start_time || "",
+    endTime: dbJob.end_time || "",
+    status: dbJob.status || null,
     cancelReason: dbJob.cancel_reason ?? null,
     createdBy: dbJob.created_by ?? null,
-    createdAt: dbJob.created_at,
-    updatedAt: dbJob.updated_at,
-    jobRoles: (dbJob.job_roles || []).map((role: any): JobRole => ({
-      id: role.id,
-      jobId: role.job_id,
-      role: role.role,
-      totalSlots: role.total_slots,
-      wageInr: Number(role.wage_inr),
-    })),
+    createdAt: dbJob.created_at || "",
+    updatedAt: dbJob.updated_at || "",
+    jobRoles: Array.isArray(dbJob.job_roles)
+      ? dbJob.job_roles.map((role: any): JobRole => ({
+          id: role.id,
+          jobId: role.job_id,
+          role: role.role,
+          totalSlots: role.total_slots,
+          wageInr: Number(role.wage_inr || 0),
+        }))
+      : [],
   };
 }
 
@@ -95,13 +116,15 @@ export async function fetchUserJobs(currentUserId: string): Promise<UserJob[]>{
 
   if(!data) return [];
 
-  return data.map((row: any) => ({
-    applicationId: row.id,
-    status: row.status,
-    role: row.role,
-    cancelReason: row.cancel_reason ?? null,
-    job: formatDbJob(row.jobs)
-  }));
+  return data
+    .filter((row: any) => row.jobs)
+    .map((row: any) => ({
+      applicationId: row.id,
+      status: row.status,
+      role: row.role,
+      cancelReason: row.cancel_reason ?? null,
+      job: formatDbJob(row.jobs)
+    }));
 }
 
 export async function applyForJob(jobId: string, userId: string, role: string): Promise<void> {
