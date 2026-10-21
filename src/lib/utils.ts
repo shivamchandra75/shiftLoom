@@ -1,7 +1,10 @@
-export function getFormattedDate(dateString: string): string {
+export function getFormattedDate(dateString?: string | null): string {
+  if (!dateString) return "";
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (diffInSeconds < 0) return "Just now";
 
   const diffInMinutes = Math.floor(diffInSeconds / 60);
   const diffInHours = Math.floor(diffInMinutes / 60);

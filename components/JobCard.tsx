@@ -10,6 +10,8 @@ export interface JobCardProps {
   onPress?: () => void;
   className?: string;
   createdAt: string;
+  isSaved?: boolean;
+  onSaveToggle?: () => void;
 }
 
 export function JobCard({
@@ -20,6 +22,8 @@ export function JobCard({
   logoUrl,
   onPress,
   className = "",
+  isSaved = false,
+  onSaveToggle,
 }: JobCardProps) {
   // Format wage to show currency symbol nicely
   const formattedWage = typeof wage === "number" 
@@ -61,6 +65,23 @@ export function JobCard({
             </Text>
           </View>
         </View>
+
+        {onSaveToggle && (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              onSaveToggle();
+            }}
+            hitSlop={8}
+            className="p-1 active:opacity-60"
+          >
+            <MaterialCommunityIcons 
+              name={isSaved ? "bookmark" : "bookmark-outline"} 
+              size={24} 
+              color={isSaved ? "#000000" : "#747775"} 
+            />
+          </Pressable>
+        )}
       </View>
 
       <View className="flex-row items-center justify-between gap-2">
