@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import '@/src/global.css';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/src/store/useAuthStore';
 
@@ -21,9 +22,12 @@ function NavigationGuard() {
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[1] === 'onboarding';
     const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'job' || segments[0] === 'notifications';
+    const inAdminGroup = segments[0] === '(admin)' || segments[0] === 'admin-job';
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/login');
+    } else if (user?.role === 'admin') {
+      if (!inAdminGroup) router.replace('/(admin)');
     } else if (user && ( !user.role || !user?.firstName ) && !inOnboarding) {
       router.replace('/(user)/onboarding');
     }else if(user && user.role && user.firstName && !inAppGroup){
@@ -47,6 +51,7 @@ export default function RootLayout() {
   }
 
   return (
+    <KeyboardProvider>
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <NavigationGuard />
       <Stack screenOptions={{ headerShown: false }}>
@@ -59,6 +64,18 @@ export default function RootLayout() {
             title: "Shift Details"
           }}
         />
+        <Stack.Screen name="admin-job/new"
+          options={{
+            headerShown: true,
+            title: "Post a Job"
+          }}
+        />
+        <Stack.Screen name="admin-job/[id]"
+          options={{
+            headerShown: true,
+            title: "Job Details"
+          }}
+        />
         <Stack.Screen
           name="notifications"
           options={{
@@ -69,5 +86,6 @@ export default function RootLayout() {
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
+    </KeyboardProvider>
   );
 }

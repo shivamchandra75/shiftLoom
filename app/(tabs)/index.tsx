@@ -10,25 +10,25 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function HomeScreen() {
   const { user } = useAuthStore();
-  const { 
-    getJobs, 
-    isLoading: isJobLoading, 
-    jobList, 
-    getSavedJobs, 
-    savedJobIds, 
-    toggleSaveJob 
+  const {
+    getJobs,
+    isLoading: isJobLoading,
+    jobList,
+    getSavedJobs,
+    savedJobIds,
+    toggleSaveJob
   } = useJobStore();
   const router = useRouter();
 
   // console.log(jobList?.[0]);
 
   useEffect(() => {
-    if (user?.role) getJobs(user.role);
+    if (user?.role && user.role !== 'admin') getJobs(user.role);
     if (user?.id) getSavedJobs(user.id);
   }, [user?.role, user?.id]);
 
   return (
-    <ScrollView 
+    <ScrollView
       className="flex-grow bg-background"
       contentContainerClassName="flex-grow px-6 py-12 justify-center"
     >
@@ -39,7 +39,7 @@ export default function HomeScreen() {
             <Text className="text-body-medium text-on-surface-variant">Welcome back,</Text>
             <Text className="text-headline-small font-bold text-on-surface">{user?.firstName || 'User'}</Text>
           </View>
-          <Pressable 
+          <Pressable
             onPress={() => router.push('/notifications')}
             className="w-12 h-12 rounded-full border border-outline bg-surface items-center justify-center active:opacity-70"
           >
@@ -68,10 +68,9 @@ export default function HomeScreen() {
 
           <View className="flex-row justify-between items-center">
             <Text className="text-body-medium text-on-surface-variant">Verification Status</Text>
-            <View 
-              className={`px-3 py-1 rounded-full ${
-                user?.isVerified ? "bg-success" : "bg-warning"
-              }`}
+            <View
+              className={`px-3 py-1 rounded-full ${user?.isVerified ? "bg-success" : "bg-warning"
+                }`}
             >
               <Text className="text-label-medium text-on-primary font-bold">
                 {user?.isVerified ? "Verified" : "Pending"}
@@ -92,7 +91,7 @@ export default function HomeScreen() {
               <JobCard
                 companyName={item.companyName}
                 location={item.locationAddress}
-                createdAt={getFormattedDate( item.createdAt )}
+                createdAt={getFormattedDate(item.createdAt)}
                 wage={item?.jobRoles?.[0].wageInr}
                 isSaved={savedJobIds.includes(item.id)}
                 onSaveToggle={() => user?.id && toggleSaveJob(item, user.id)}

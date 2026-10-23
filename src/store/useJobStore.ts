@@ -4,6 +4,10 @@ import {
   fetchUserJobs, 
   applyForJob, 
   cancelJobApplication,
+  fetchAdminJobs,
+  cancelJobByAdmin,
+  createJob,
+  NewJobInput,
   fetchSavedJobs, 
   saveJob, 
   unsaveJob, 
@@ -15,6 +19,7 @@ import {
 
 interface JobState {
   jobList: Job[];
+  adminJobList: Job[];
   userJobList: UserJob[];
   savedJobList: Job[];
   savedJobIds: string[];
@@ -23,6 +28,9 @@ interface JobState {
   isCancelling: boolean;
   error: string | null;
   getJobs: (role?:JobRole['role']) => Promise<void>;
+  getAdminJobs: (adminId: string) => Promise<void>;
+  cancelAdminJob: (jobId: string, reason: string) => Promise<void>;
+  createAdminJob: (input: NewJobInput, adminId: string) => Promise<void>;
   getUserJobs: (id: string) => Promise<void>;
   applyJob: (jobId: string, userId: string, role: string) => Promise<void>;
   cancelJob: (jobId: string, userId: string, reason: string) => Promise<void>;
@@ -32,6 +40,7 @@ interface JobState {
 
 export const useJobStore = create<JobState>((set, get) => ({
   jobList: [],
+  adminJobList: [],
   userJobList: [],
   savedJobList: [],
   savedJobIds: [],
@@ -51,6 +60,37 @@ export const useJobStore = create<JobState>((set, get) => ({
       console.error(error);
       set({ error: error?.message || "Failed to fetch jobs", isLoading: false });
     }
+  },
+  getAdminJobs: async (adminId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const data = await fetchAdminJobs(adminId);
+      set({ adminJobList: data, isLoading: false });
+    } catch (error: any) {
+      console.error(error);
+      set({ error: error?.message || "Failed to fetch jobs", isLoading: false });
+    }
+  },
+  cancelAdminJob: async (jobId, reason) => {
+    set({ isCancelling: true, error: null });
+    try {
+      await cancelJobByAdmin(jobId, reason);
+      set({
+        adminJobList: get().adminJobList.map(j =>
+          j.id === jobId ? { ...j, status: "cancelled", cancelReason: reason } : j
+        ),
+        isCancelling: false,
+      });
+    } catch (error: any) {
+      console.error(error);
+      set({ error: error?.message || "Failed to cancel job", isCancelling: false });
+      throw error;
+    }
+  },
+  createAdminJob: async (input, adminId) => {
+    await createJob(input);
+    // Refetch so the new job arrives with its DB-generated id, roles and timestamps
+    await get().getAdminJobs(adminId);
   },
   getUserJobs: async (userId) => {
     set({ isLoading: true, error: null });

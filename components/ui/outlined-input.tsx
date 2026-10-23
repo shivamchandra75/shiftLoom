@@ -10,6 +10,8 @@ interface OutlinedInputProps {
   secureTextEntry?: boolean;
   keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
   className?: string;
+  onSubmitEditing?: () => void;
+  returnKeyType?: "done" | "search" | "next";
 }
 
 export function OutlinedInput({
@@ -21,6 +23,8 @@ export function OutlinedInput({
   secureTextEntry = false,
   keyboardType = "default",
   className = "",
+  onSubmitEditing,
+  returnKeyType,
 }: OutlinedInputProps) {
   const [isFocused, setIsFocused] = useState(false);
 
@@ -57,6 +61,8 @@ export function OutlinedInput({
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
           onFocus={() => setIsFocused(true)}
+          onSubmitEditing={onSubmitEditing}
+          returnKeyType={returnKeyType}
           onBlur={() => setIsFocused(false)}
           className="text-body-large text-on-surface w-full"
           style={{ paddingVertical: 2 }}

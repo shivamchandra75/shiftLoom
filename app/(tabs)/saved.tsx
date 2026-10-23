@@ -54,7 +54,7 @@ export default function SavedJobsScreen() {
                   toggleSaveJob(item, user.id);
                 }
               }}
-              onPress={() => router.push({ pathname: '/job/[id]', params: { id: item.id } })}
+              onPress={() => router.push({ pathname: user?.role === 'admin' ? '/admin-job/[id]' : '/job/[id]', params: { id: item.id } })}
               className="mb-4"
             />
           )}

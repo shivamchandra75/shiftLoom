@@ -203,3 +203,102 @@ export async function cancelJobApplication(jobId: string, userId: string, reason
   }
 }
 
+
+export interface JobAssignment {
+  applicationId: string;
+  role: JobRole['role'];
+  userId: string;
+  name: string;
+  email: string;
+}
+
+export async function fetchAdminJobs(adminId: string): Promise<Job[]> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("*, job_roles(*)")
+    .eq("created_by", adminId);
+
+  if (error) throw error;
+  return (data ?? []).map(formatDbJob);
+}
+
+export async function fetchJobAssignments(jobId: string): Promise<JobAssignment[]> {
+  const { data, error } = await supabase
+    .from("user_jobs")
+    .select("id, role, users(id, first_name, last_name, email)")
+    .eq("job_id", jobId)
+    .eq("status", "accepted");
+
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    applicationId: row.id,
+    role: row.role,
+    userId: row.users?.id ?? "",
+    name: `${row.users?.first_name ?? ""} ${row.users?.last_name ?? ""}`.trim() || "Unknown worker",
+    email: row.users?.email ?? "",
+  }));
+}
+
+export async function cancelJobByAdmin(jobId: string, reason: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .update({ status: "cancelled", cancel_reason: reason, updated_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .in("status", ["open", "closed"])
+    .select("id");
+
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("Failed to cancel: job is not open/closed or RLS policy blocked the update.");
+  }
+}
+
+export interface NewJobInput {
+  companyName: string;
+  locationAddress: string;
+  latitude: number;
+  longitude: number;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  roles: { role: JobRole['role']; totalSlots: number; wageInr: number }[];
+}
+
+// Uses the create_job RPC so the job and its roles are inserted in one transaction.
+export async function createJob(input: NewJobInput): Promise<string> {
+  const { data, error } = await supabase.rpc("create_job", {
+    p_job: {
+      company_name: input.companyName,
+      location_address: input.locationAddress,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      job_date: input.date,
+      start_time: input.startTime,
+      end_time: input.endTime,
+    },
+    p_roles: input.roles.map((r) => ({ role: r.role, total_slots: r.totalSlots, wage_inr: r.wageInr })),
+  });
+
+  if (error) throw error;
+  return data as string;
+}
+
+// Distinct company names from past jobs, for the post-job autocomplete
+export async function searchCompanies(query: string, signal: AbortSignal): Promise<string[]> {
+  const pattern = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("company_name")
+    .ilike("company_name", pattern)
+    .order("created_at", { ascending: false })
+    .limit(50)
+    .abortSignal(signal);
+
+  if (error) throw error;
+  const seen = new Map<string, string>();
+  for (const row of data ?? []) {
+    const name = String(row.company_name).trim();
+    if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+  }
+  return [...seen.values()].slice(0, 6);
+}
