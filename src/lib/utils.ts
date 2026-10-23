@@ -41,3 +41,25 @@ export function formatTimeTo12Hour(time24: string) {
 
   return `${hour}:${minuteStr} ${ampm}`;
 }
+
+// True when the job date is more than 2 days away (cancellation window for workers and admins).
+export function canCancelShift(jobDateStr: string): boolean {
+  if (!jobDateStr) return false;
+  const [year, month, day] = jobDateStr.split('-').map(Number);
+  const jobDate = new Date(year, month - 1, day);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const diffTime = jobDate.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  return diffDays > 2;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+// Local YYYY-MM-DD, same format as jobs.job_date
+export const toYmd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+// Local HH:MM, same format as jobs.start_time / end_time
+export const toHm = (d: Date) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;

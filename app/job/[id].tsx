@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Platform, Linking, Share, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, Platform, Linking, Share, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useJobStore } from '@/src/store/useJobStore';
 import { useAuthStore } from '@/src/store/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import MapView, { Marker } from 'react-native-maps';
-import { formatDate, formatTimeTo12Hour } from '@/src/lib/utils';
+import { OsmMap } from '@/components/OsmMap';
+import { canCancelShift, formatDate, formatTimeTo12Hour } from '@/src/lib/utils';
+import { CancelReasonModal } from '@/components/CancelReasonModal';
 
 const SUPPORT_BG_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" fill="none"><circle cx="360" cy="20" r="80" fill="%23006A60" fill-opacity="0.07"/><circle cx="30" cy="110" r="50" fill="%23006A60" fill-opacity="0.05"/><path d="M-20 60 C 100 10, 180 110, 280 50 C 340 10, 390 80, 420 40" stroke="%23006A60" stroke-width="32" stroke-opacity="0.06"/></svg>`;
 
@@ -16,19 +17,6 @@ const CANCELLATION_REASONS = [
   "Schedule Conflict",
   "Other",
 ];
-
-function canCancelShift(jobDateStr: string): boolean {
-  if (!jobDateStr) return false;
-  const [year, month, day] = jobDateStr.split('-').map(Number);
-  const jobDate = new Date(year, month - 1, day);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  const diffTime = jobDate.getTime() - today.getTime();
-  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-  return diffDays > 2;
-}
 
 export default function JobDetailScreen() {
 
@@ -48,8 +36,6 @@ export default function JobDetailScreen() {
   const { user } = useAuthStore();
   
   const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
-  const [selectedReason, setSelectedReason] = useState<string>("Medical / Personal Emergency");
-  const [otherReasonText, setOtherReasonText] = useState<string>("");
 
   const job = jobList.find(j => j.id === id);
   const userApplication = userJobList.find(uj => uj?.job?.id === id);
@@ -98,14 +84,10 @@ export default function JobDetailScreen() {
     setIsCancelModalVisible(true);
   };
 
-  const handleConfirmCancellation = async () => {
+  const handleConfirmCancellation = async (reason: string) => {
     if (!user?.id || !job) return;
-    const formattedReason = selectedReason === "Other"
-      ? (otherReasonText.trim() ? `Other: ${otherReasonText.trim()}` : "Other")
-      : selectedReason;
-
     try {
-      await cancelJob(job.id, user.id, formattedReason);
+      await cancelJob(job.id, user.id, reason);
       setIsCancelModalVisible(false);
       Alert.alert("Shift Cancelled", "Your shift has been cancelled.");
       router.back();
@@ -173,23 +155,12 @@ export default function JobDetailScreen() {
 
           {job.latitude && job.longitude && (
             <View className="rounded-2xl overflow-hidden mt-3 border border-outline">
-              <MapView
-                style={{ height: 160, width: '100%' }}
-                initialRegion={{
-                  latitude: job.latitude,
-                  longitude: job.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-                scrollEnabled={false}
-                pitchEnabled={false}
-                rotateEnabled={false}
-                zoomEnabled={false}
-              >
-                <Marker 
-                  coordinate={{ latitude: job.latitude, longitude: job.longitude }} 
-                />
-              </MapView>
+              <OsmMap
+                height={160}
+                interactive={false}
+                initial={{ latitude: job.latitude, longitude: job.longitude, zoom: 15 }}
+                pin={{ latitude: job.latitude, longitude: job.longitude }}
+              />
               <Pressable 
                 onPress={handleOpenMaps}
                 className="bg-surface/90 absolute bottom-2 right-2 flex-row items-center px-3 py-1.5 rounded-full"
@@ -328,96 +299,16 @@ export default function JobDetailScreen() {
         )}
       </View>
 
-      {/* Two-Step Cancellation Modal */}
-      <Modal
+      <CancelReasonModal
         visible={isCancelModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsCancelModalVisible(false)}
-      >
-        <View className="flex-1 bg-black/60 justify-end">
-          <Pressable
-            className="flex-1"
-            onPress={() => setIsCancelModalVisible(false)}
-          />
-          <View className="bg-surface rounded-t-3xl p-6 pb-10 border-t border-outline">
-            <View className="w-12 h-1.5 bg-outline rounded-full self-center mb-4" />
-
-            <Text className="text-headline-small font-bold text-on-surface mb-1">
-              Cancel Shift
-            </Text>
-            <Text className="text-body-medium text-on-surface-variant mb-5">
-              Please choose a reason for cancelling this shift. This feedback helps improve worker scheduling.
-            </Text>
-
-            {/* Reason Options */}
-            <View className="gap-2.5 mb-4">
-              {CANCELLATION_REASONS.map((reason) => {
-                const isSelected = selectedReason === reason;
-                return (
-                  <Pressable
-                    key={reason}
-                    onPress={() => setSelectedReason(reason)}
-                    className={`flex-row items-center justify-between p-3.5 rounded-2xl border ${
-                      isSelected
-                        ? 'border-primary bg-primary/10'
-                        : 'border-outline bg-surface-variant/20'
-                    }`}
-                  >
-                    <Text className={`font-medium ${isSelected ? 'text-primary font-semibold' : 'text-on-surface'}`}>
-                      {reason}
-                    </Text>
-                    <MaterialCommunityIcons
-                      name={isSelected ? "radiobox-marked" : "radiobox-blank"}
-                      size={20}
-                      color={isSelected ? "#006A60" : "#747775"}
-                    />
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Custom Input for 'Other' */}
-            {selectedReason === "Other" && (
-              <View className="mb-4">
-                <Text className="text-body-small text-on-surface-variant mb-1 font-medium">
-                  Please describe your reason (optional):
-                </Text>
-                <TextInput
-                  value={otherReasonText}
-                  onChangeText={setOtherReasonText}
-                  placeholder="Enter details here..."
-                  placeholderTextColor="#747775"
-                  multiline
-                  numberOfLines={3}
-                  className="p-3 border border-outline rounded-xl bg-surface text-on-surface text-body-medium min-h-[70px]"
-                  style={{ textAlignVertical: 'top' }}
-                />
-              </View>
-            )}
-
-            {/* Modal Actions */}
-            <View className="flex-row gap-3 mt-2">
-              <Pressable
-                onPress={() => setIsCancelModalVisible(false)}
-                className="flex-1 py-3.5 rounded-full border border-outline items-center justify-center active:bg-surface-variant/30"
-              >
-                <Text className="font-semibold text-on-surface">Keep Shift</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleConfirmCancellation}
-                disabled={isCancelling}
-                className="flex-1 py-3.5 rounded-full bg-red-600 items-center justify-center active:opacity-90"
-              >
-                <Text className="font-semibold text-white">
-                  {isCancelling ? 'Cancelling...' : 'Confirm'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        title="Cancel Shift"
+        description="Please choose a reason for cancelling this shift. This feedback helps improve worker scheduling."
+        reasons={CANCELLATION_REASONS}
+        keepLabel="Keep Shift"
+        isSubmitting={isCancelling}
+        onClose={() => setIsCancelModalVisible(false)}
+        onConfirm={handleConfirmCancellation}
+      />
     </View>
   );
 }

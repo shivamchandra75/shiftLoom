@@ -5,7 +5,7 @@ export type UpdateProfileInput = Partial<Pick<User, 'firstName' | 'lastName' | '
 export interface User {
   id: string;
   email: string;
-  role: "steward" | "chef" | "driver" | null;
+  role: "steward" | "chef" | "driver" | "admin" | null;
   isVerified: boolean;
   firstName: string;
   lastName: string;
@@ -34,7 +34,7 @@ export async function fetchUser(userId: string): Promise<User | null> {
     id: dbUser.id,
     email: dbUser.email || "",
     role: dbUser.role,
-    isVerified: dbUser.verification_status === "verified",
+    isVerified: dbUser.role === "admin" || dbUser.verification_status === "verified",
     firstName: dbUser.first_name || "",
     lastName: dbUser.last_name || "",
   };

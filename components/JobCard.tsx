@@ -12,6 +12,7 @@ export interface JobCardProps {
   createdAt: string;
   isSaved?: boolean;
   onSaveToggle?: () => void;
+  status?: string | null;
 }
 
 export function JobCard({
@@ -24,6 +25,7 @@ export function JobCard({
   className = "",
   isSaved = false,
   onSaveToggle,
+  status,
 }: JobCardProps) {
   // Format wage to show currency symbol nicely
   const formattedWage = typeof wage === "number" 
@@ -89,9 +91,16 @@ export function JobCard({
           {formattedWage} per shift
         </Text>
 
-        <Text className="text-body-small text-gray-400  font-medium">
-          {createdAt}
-        </Text>
+        <View className="flex-row items-center gap-2">
+          {status && (
+            <View className="px-2 py-0.5 rounded-full border border-outline">
+              <Text className="text-label-small text-on-surface-variant capitalize">{status}</Text>
+            </View>
+          )}
+          <Text className="text-body-small text-gray-400  font-medium">
+            {createdAt}
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
