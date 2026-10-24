@@ -21,8 +21,8 @@ function NavigationGuard() {
   useEffect(() => {
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[1] === 'onboarding';
-    const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'job' || segments[0] === 'notifications';
-    const inAdminGroup = segments[0] === '(admin)' || segments[0] === 'admin-job';
+    const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'job' || segments[0] === 'notifications' || segments[0] === 'documents';
+    const inAdminGroup = segments[0] === '(admin)' || segments[0] === 'admin-job' || segments[0] === 'admin-user';
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/login');
@@ -70,10 +70,23 @@ export default function RootLayout() {
             title: "Post a Job"
           }}
         />
+        <Stack.Screen name="admin-user/[id]"
+          options={{
+            headerShown: true,
+            title: "Review Worker"
+          }}
+        />
         <Stack.Screen name="admin-job/[id]"
           options={{
             headerShown: true,
             title: "Job Details"
+          }}
+        />
+        <Stack.Screen
+          name="documents"
+          options={{
+            headerShown: true,
+            title: "Verification Documents"
           }}
         />
         <Stack.Screen
