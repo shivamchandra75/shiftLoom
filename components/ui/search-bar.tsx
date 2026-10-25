@@ -1,86 +1,42 @@
-import React, { useState, useRef } from "react";
-import { View, TextInput, Pressable } from "react-native";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import React, { useRef } from "react";
+import { View, TextInput } from "react-native";
+import { colors } from "@/src/theme/tokens";
+import { Icon } from "@/components/ui/Icon";
+import { IconButton } from "@/components/ui/IconButton";
 
 interface SearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
-  onBackPress?: () => void;
   className?: string;
 }
 
-export function SearchBar({
-  value,
-  onChangeText,
-  placeholder = "Search shifts...",
-  onBackPress,
-  className = "",
-}: SearchBarProps) {
-  const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<any>(null);
-
-  const activeBorder = isFocused ? "border-primary bg-background" : "border-transparent bg-surface-variant";
-
-  const handleClear = () => {
-    onChangeText("");
-    inputRef.current?.focus();
-  };
-
-  const handleBack = () => {
-    inputRef.current?.blur();
-    setIsFocused(false);
-    if (onBackPress) {
-      onBackPress();
-    }
-  };
-
+// Search bar (Figma 238:2563): surface pill on the surface-container page. Clear appears while typing.
+export function SearchBar({ value, onChangeText, placeholder = "Search by area or business", className = "" }: SearchBarProps) {
+  const inputRef = useRef<TextInput>(null);
   return (
-    <View
-      className={`flex-row items-center border rounded-full px-4 py-2 min-h-[48px] ${activeBorder} ${className}`}
-    >
-      {/* Left Icon (Back Button when active, Search when inactive) */}
-      {isFocused ? (
-        <Pressable onPress={handleBack} className="mr-3">
-          <MaterialCommunityIcons 
-            name="arrow-left" 
-            size={22} 
-            color="var(--on-surface)" 
-          />
-        </Pressable>
-      ) : (
-        <View className="mr-3">
-          <MaterialCommunityIcons 
-            name="magnify" 
-            size={22} 
-            color="var(--on-surface-variant)" 
-          />
-        </View>
-      )}
-
-      {/* TextInput */}
+    <View className={`h-14 flex-row items-center gap-3 rounded-full bg-surface pl-4 pr-2 ${className}`}>
+      <Icon name="search" />
       <TextInput
         ref={inputRef}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="var(--outline-variant)"
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        className="flex-1 text-body-large text-on-surface py-1"
-        style={{ paddingVertical: 4 }}
+        placeholderTextColor={colors["on-surface-variant"]}
+        returnKeyType="search"
+        accessibilityLabel={placeholder}
+        className="flex-1 font-inter text-body-large text-on-surface"
       />
-
-      {/* Right Icon (Clear Button when active and text exists) */}
-      {isFocused && value.length > 0 ? (
-        <Pressable onPress={handleClear} className="ml-2">
-          <MaterialCommunityIcons 
-            name="close-circle" 
-            size={20} 
-            color="var(--on-surface-variant)" 
-          />
-        </Pressable>
-      ) : null}
+      {value.length > 0 && (
+        <IconButton
+          icon="close"
+          accessibilityLabel="Clear search"
+          onPress={() => {
+            onChangeText("");
+            inputRef.current?.focus();
+          }}
+        />
+      )}
     </View>
   );
 }

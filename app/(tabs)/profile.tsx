@@ -189,9 +189,9 @@ export default function ProfileScreen() {
             label="Log Out"
             onPress={handleLogout}
             loading={isLoading}
-            variant="secondary"
-            className="w-full border-error active:bg-error/10"
-            textClassName="text-error"
+            variant="outlined"
+            tone="error"
+            className="w-full"
           />
         </View>
       </View>

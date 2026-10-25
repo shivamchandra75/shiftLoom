@@ -6,6 +6,12 @@ import '@/src/global.css';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/src/store/useAuthStore';
+import { useFonts } from 'expo-font';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { MaterialSymbolsRounded_400Regular } from '@expo-google-fonts/material-symbols-rounded/400Regular';
+import { MaterialSymbolsRounded_400Regular_Filled } from '@expo-google-fonts/material-symbols-rounded/400Regular_Filled';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -41,12 +47,19 @@ function NavigationGuard() {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const { initialize, isInitialized } = useAuthStore();
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    MaterialSymbolsRounded_400Regular,
+    MaterialSymbolsRounded_400Regular_Filled,
+  });
 
   useEffect(() => {
     initialize();
   }, []);
 
-  if (!isInitialized) {
+  if (!isInitialized || !fontsLoaded) {
     return null; // Return null (or splash screen) during initial session check
   }
 

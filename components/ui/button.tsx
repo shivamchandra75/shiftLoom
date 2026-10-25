@@ -1,65 +1,97 @@
 import React from "react";
-import { Pressable, Text, ActivityIndicator } from "react-native";
+import { Pressable, ActivityIndicator, View } from "react-native";
+import { colors } from "@/src/theme/tokens";
+import { Text, ColorToken } from "@/components/ui/Text";
+import { Icon } from "@/components/ui/Icon";
 
-interface ButtonProps {
+export type ButtonVariant = "filled" | "tonal" | "outlined" | "text";
+
+export interface ButtonProps {
   label: string;
   onPress?: () => void;
-  variant?: "primary" | "secondary";
+  variant?: ButtonVariant;
+  /** medium = 40px (default everywhere), large = 48px */
+  size?: "medium" | "large";
+  /** error = destructive action (cancel shift, remove, reject) */
+  tone?: "default" | "error";
+  leadingIcon?: string;
   loading?: boolean;
   disabled?: boolean;
   className?: string;
-  textClassName?: string;
+  accessibilityLabel?: string;
 }
 
+const CONTAINER: Record<ButtonVariant, string> = {
+  filled: "bg-primary",
+  tonal: "bg-primary-container",
+  outlined: "border border-outline-variant",
+  text: "",
+};
+const LABEL: Record<ButtonVariant, ColorToken> = {
+  filled: "on-primary",
+  tonal: "on-primary-container",
+  outlined: "primary",
+  text: "primary",
+};
+
+// SL Button (Figma 209:76): Style × State × Leading icon × Size.
 export function Button({
   label,
   onPress,
-  variant = "primary",
+  variant = "filled",
+  size = "medium",
+  tone = "default",
+  leadingIcon,
   loading = false,
   disabled = false,
   className = "",
-  textClassName = "",
+  accessibilityLabel,
 }: ButtonProps) {
-  const isPrimary = variant === "primary";
-  
-  // M3 styling classes
-  const baseButtonClass = "rounded-full py-2 px-6 items-center justify-center flex-row min-h-[52px]";
-  const primaryButtonClass = isPrimary
-    ? "bg-primary active:bg-primary/90"
-    : "active:bg-secondary/90 border border-outline";
-  
-  const disabledClass = disabled || loading ? "opacity-50" : "";
-  
-  // Use text-lg instead of custom text-label-large to avoid prefix conflicts with text-on-primary
-  // Removed tracking-wider because 'em' units can cause text rendering corruption on Android
-  const baseTextClass = "text-lg font-bold";
-  const primaryTextClass = isPrimary ? "text-on-primary" : "text-on-secondary";
+  const isError = tone === "error";
+  const inactive = disabled && !loading;
+  let container = CONTAINER[variant];
+  let labelColor: ColorToken = LABEL[variant];
+  if (isError && variant === "filled") container = "bg-error";
+  if (isError && variant === "outlined") container = "border border-error";
+  if (isError && variant !== "filled" && variant !== "tonal") labelColor = "error";
+  if (inactive) {
+    container = variant === "filled" || variant === "tonal" ? "bg-on-surface/10" : variant === "outlined" ? "border border-on-surface/10" : "";
+  }
+  const height = size === "large" ? "h-12" : "h-10";
 
   return (
     <Pressable
-      onPress={disabled || loading ? undefined : onPress}
+      onPress={onPress}
       disabled={disabled || loading}
-      className={`${baseButtonClass} ${primaryButtonClass} ${disabledClass} ${className}`}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      className={`${height} flex-row items-center justify-center gap-2 rounded-full px-6 active:opacity-80 ${container} ${className}`}
     >
       {loading ? (
-        <ActivityIndicator 
-          size="small" 
-          color={isPrimary ? "var(--on-primary)" : "var(--on-secondary)"} 
-          style={{ marginRight: 8 }}
-        />
+        <ActivityIndicator size="small" color={colors[labelColor]} />
+      ) : leadingIcon ? (
+        <View className={inactive ? "opacity-40" : ""}>
+          <Icon name={leadingIcon} size={18} color={inactive ? "on-surface" : labelColor} />
+        </View>
       ) : null}
-      <Text className={`${baseTextClass} ${primaryTextClass} ${textClassName}`}>
+      <Text
+        variant={size === "large" ? "title-medium" : "label-large"}
+        color={inactive ? "on-surface" : labelColor}
+        className={inactive ? "opacity-40" : ""}
+        numberOfLines={1}
+      >
         {label}
       </Text>
     </Pressable>
   );
 }
 
-// Named exports for explicit convenience
+// shortcut: old call sites (auth, onboarding) still use these; remove once those screens are migrated
 export function PrimaryButton(props: Omit<ButtonProps, "variant">) {
-  return <Button {...props} variant="primary" />;
+  return <Button {...props} variant="filled" />;
 }
 
 export function SecondaryButton(props: Omit<ButtonProps, "variant">) {
-  return <Button {...props} variant="secondary" />;
+  return <Button {...props} variant="outlined" />;
 }

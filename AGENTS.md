@@ -130,7 +130,11 @@ eas build --platform android
   consistently once decided (see §3).
 - Handle loading, error, and empty states explicitly for anything that fetches data — don't
   assume the happy path.
-- always use MaterialCommunityIcons first when using expo vector icons.
+- Icons: use `Icon` from `@/components/ui/Icon` (Material Symbols Rounded, Figma Material Icons names
+  like `bookmark_border`). Don't add new `@expo/vector-icons` usages.
+- Design tokens live in `src/theme/tokens.js` (colors, spacing, radius, type, elevation) and feed
+  `tailwind.config.js`. Never hardcode a hex, font size or font family in a component; add a token.
+  Use `Text` from `@/components/ui/Text` (variant + color props) instead of RN `Text`.
 
 ---
 

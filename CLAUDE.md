@@ -10,6 +10,8 @@ ShiftLoom: a shift/job marketplace app (Expo SDK 54, React Native 0.81, React 19
 
 **Decided stack:** Zustand (state), NativeWind v4 + Tailwind 3 (styling, `className`), Supabase (auth + Postgres backend). No server-state library, no test runner installed yet.
 
+**Design system:** Figma file `Kst76TL9bfwt3RYITqOR2E` (pages "Design System" and "Redesign") is the source for UI. Tokens in `src/theme/tokens.js` mirror its SL variables and drive `tailwind.config.js`. Shared components in `components/ui/` map 1:1 to Figma components (each file names its Figma node). Fonts: Inter + Material Symbols Rounded, loaded in `app/_layout.tsx`.
+
 ## Commands
 
 Scripts that exist: `npm start`, `npm run ios`, `npm run android`, `npm run web`, `npm run lint` (expo lint). Type-check with `npx tsc --noEmit`. There is **no `npm test`** — Jest/jest-expo is not set up.
