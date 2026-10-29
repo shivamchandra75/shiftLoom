@@ -20,6 +20,8 @@ export interface UserDocument {
   status: DocStatus;
   rejectionReason: string | null;
   updatedAt: string;
+  filePath: string;
+  mimeType: string;
 }
 
 // A file picked on the device, not uploaded yet
@@ -60,7 +62,7 @@ export function checkPickedFile(file: PickedFile): string | null {
 export async function fetchMyDocuments(userId: string): Promise<UserDocument[]> {
   const { data, error } = await supabase
     .from("user_documents")
-    .select("id, doc_type, file_name, status, rejection_reason, updated_at")
+    .select("id, doc_type, file_name, file_path, mime_type, status, rejection_reason, updated_at")
     .eq("user_id", userId);
 
   if (error) throw error;
@@ -71,6 +73,8 @@ export async function fetchMyDocuments(userId: string): Promise<UserDocument[]> 
     status: d.status,
     rejectionReason: d.rejection_reason,
     updatedAt: d.updated_at,
+    filePath: d.file_path,
+    mimeType: d.mime_type,
   }));
 }
 

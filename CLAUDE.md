@@ -10,13 +10,14 @@ ShiftLoom: a shift/job marketplace app (Expo SDK 54, React Native 0.81, React 19
 
 **Decided stack:** Zustand (state), NativeWind v4 + Tailwind 3 (styling, `className`), Supabase (auth + Postgres backend). No server-state library, no test runner installed yet.
 
+**Design system:** Figma file `Kst76TL9bfwt3RYITqOR2E` (pages "Design System" and "Redesign") is the source for UI. Tokens in `src/theme/tokens.js` mirror its SL variables and drive `tailwind.config.js`. Shared components in `components/ui/` map 1:1 to Figma components (each file names its Figma node). Fonts: Inter + Material Symbols Rounded, loaded in `app/_layout.tsx`.
+
 ## Commands
 
 Scripts that exist: `npm start`, `npm run ios`, `npm run android`, `npm run web`, `npm run lint` (expo lint). Type-check with `npx tsc --noEmit`. There is **no `npm test`** — Jest/jest-expo is not set up.
 
 ## Architecture
 
-- **Path alias:** `@/*` maps to the repo root, so imports look like `@/src/store/...`, `@/components/...`, `@/hooks/...`. Note `components/`, `hooks/`, `constants/` live at the root, not under `src/` (diverges from AGENTS.md §4).
 - **Data flow:** screen → Zustand store (`src/store/useAuthStore.ts`, `src/store/useJobStore.ts`) → service (`src/services/*Service.ts`) → Supabase client (`src/lib/supabase.ts`). Services own Supabase queries and map snake_case DB rows to camelCase types (e.g. `formatDbJob` in `jobService.ts`); stores hold loading/error flags and call services.
 - **Supabase tables in use:** `users`, `jobs`, `user_jobs` (applications, incl. cancellation reason), `saved_jobs`.
 - **Auth/routing gate:** `app/_layout.tsx` calls `useAuthStore().initialize()` and renders nothing until initialized. `NavigationGuard` redirects: no user → `(auth)/login`; user missing `role`/`firstName` → `(user)/onboarding`; otherwise → `(tabs)`. New top-level routes must be added to `inAppGroup` there or the guard will bounce users away.

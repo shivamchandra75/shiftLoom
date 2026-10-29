@@ -1,7 +1,9 @@
 import React, { useEffect } from "react";
-import { View, Text, Pressable } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { elevation } from "@/src/theme/tokens";
+import { Text } from "@/components/ui/Text";
+import { Icon } from "@/components/ui/Icon";
 
 export interface SnackbarMessage {
   text: string;
@@ -14,7 +16,7 @@ interface SnackbarProps {
   bottomOffset?: number;
 }
 
-// M3-style snackbar: brief, non-blocking confirmation at the bottom of the screen. Errors stay until dismissed.
+// Snackbar (Figma 238:2577): confirms a finished action. Success hides itself; errors stay until dismissed.
 export function Snackbar({ message, onHide, bottomOffset = 0 }: SnackbarProps) {
   const insets = useSafeAreaInsets();
 
@@ -31,13 +33,13 @@ export function Snackbar({ message, onHide, bottomOffset = 0 }: SnackbarProps) {
     <View
       accessibilityLiveRegion="polite"
       accessibilityRole="alert"
-      className="absolute left-4 right-4 flex-row items-center gap-3 rounded-xl bg-on-surface px-4 py-3 shadow-lg"
-      style={{ bottom: Math.max(insets.bottom, 12) + bottomOffset }}
+      className="absolute left-4 right-4 flex-row items-center gap-3 rounded-md bg-on-surface py-3 pl-4 pr-2"
+      style={[elevation.raised, { bottom: Math.max(insets.bottom, 12) + bottomOffset }]}
     >
-      <MaterialCommunityIcons name={isError ? "alert-circle" : "check-circle"} size={20} color={isError ? "#F2B8B5" : "#6DD58C"} />
-      <Text className="flex-1 text-body-medium text-on-primary">{message.text}</Text>
-      <Pressable onPress={onHide} hitSlop={8} accessibilityLabel="Dismiss">
-        <MaterialCommunityIcons name="close" size={18} color="#FFFFFF" />
+      {isError && <Icon name="error" size={20} color="error-container" />}
+      <Text variant="body-medium" color="surface" className="flex-1">{message.text}</Text>
+      <Pressable onPress={onHide} hitSlop={8} accessibilityRole="button" accessibilityLabel="Dismiss" className="h-8 w-8 items-center justify-center">
+        <Icon name="close" size={18} color="surface" />
       </Pressable>
     </View>
   );

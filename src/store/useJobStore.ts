@@ -30,7 +30,7 @@ interface JobState {
   getJobs: (role?:JobRole['role']) => Promise<void>;
   getAdminJobs: (adminId: string) => Promise<void>;
   cancelAdminJob: (jobId: string, reason: string) => Promise<void>;
-  createAdminJob: (input: NewJobInput, adminId: string) => Promise<void>;
+  createAdminJob: (input: NewJobInput, adminId: string) => Promise<string>;
   getUserJobs: (id: string) => Promise<void>;
   applyJob: (jobId: string, userId: string, role: string) => Promise<void>;
   cancelJob: (jobId: string, userId: string, reason: string) => Promise<void>;
@@ -88,9 +88,10 @@ export const useJobStore = create<JobState>((set, get) => ({
     }
   },
   createAdminJob: async (input, adminId) => {
-    await createJob(input);
+    const id = await createJob(input);
     // Refetch so the new job arrives with its DB-generated id, roles and timestamps
     await get().getAdminJobs(adminId);
+    return id;
   },
   getUserJobs: async (userId) => {
     set({ isLoading: true, error: null });

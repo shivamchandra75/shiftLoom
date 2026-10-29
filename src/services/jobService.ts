@@ -31,6 +31,8 @@ export interface Job {
   createdAt: string;
   updatedAt: string;
   jobRoles: JobRole[];
+  /** Accepted workers. Only present when the query joined user_jobs (admin lists). */
+  filledSlots?: number;
 }
 
 export function formatDbJob(dbJob: any): Job {
@@ -76,6 +78,7 @@ export function formatDbJob(dbJob: any): Job {
           wageInr: Number(role.wage_inr || 0),
         }))
       : [],
+    filledSlots: Array.isArray(dbJob.user_jobs) ? dbJob.user_jobs.filter((u: any) => u.status === "accepted").length : undefined,
   };
 }
 
@@ -215,7 +218,7 @@ export interface JobAssignment {
 export async function fetchAdminJobs(adminId: string): Promise<Job[]> {
   const { data, error } = await supabase
     .from("jobs")
-    .select("*, job_roles(*)")
+    .select("*, job_roles(*), user_jobs(status)")
     .eq("created_by", adminId);
 
   if (error) throw error;
@@ -283,22 +286,29 @@ export async function createJob(input: NewJobInput): Promise<string> {
   return data as string;
 }
 
-// Distinct company names from past jobs, for the post-job autocomplete
-export async function searchCompanies(query: string, signal: AbortSignal): Promise<string[]> {
+export interface CompanySuggestion {
+  name: string;
+  shifts: number;
+}
+
+// Distinct company names from past jobs with how many shifts each has, for the post-job autocomplete
+export async function searchCompanies(query: string, signal: AbortSignal): Promise<CompanySuggestion[]> {
   const pattern = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const { data, error } = await supabase
     .from("jobs")
     .select("company_name")
     .ilike("company_name", pattern)
     .order("created_at", { ascending: false })
-    .limit(50)
+    .limit(100)
     .abortSignal(signal);
 
   if (error) throw error;
-  const seen = new Map<string, string>();
+  const byName = new Map<string, CompanySuggestion>();
   for (const row of data ?? []) {
     const name = String(row.company_name).trim();
-    if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+    const hit = byName.get(name.toLowerCase());
+    if (hit) hit.shifts += 1;
+    else if (name) byName.set(name.toLowerCase(), { name, shifts: 1 });
   }
-  return [...seen.values()].slice(0, 6);
+  return [...byName.values()].slice(0, 5);
 }

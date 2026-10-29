@@ -1,163 +1,130 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, Pressable, ActivityIndicator } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, NativeScrollEvent, NativeSyntheticEvent, View } from "react-native";
 import { useRouter } from "expo-router";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuthStore } from "@/src/store/useAuthStore";
 import { useJobStore } from "@/src/store/useJobStore";
-import { JobCard } from "@/components/JobCard";
+import { colors } from "@/src/theme/tokens";
+import type { Job } from "@/src/services/jobService";
+import { Screen } from "@/components/ui/Screen";
+import { TopAppBarLarge } from "@/components/ui/TopAppBar";
 import { SearchBar } from "@/components/ui/search-bar";
-import { formatDate, getFormattedDate, toYmd } from "@/src/lib/utils";
+import { Tabs } from "@/components/ui/Tabs";
+import { AssistChip } from "@/components/ui/Chip";
+import { Subheader } from "@/components/ui/ListItem";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Fab } from "@/components/ui/Fab";
+import { Menu } from "@/components/ui/Menu";
+import { AdminJobListItem, jobSlots } from "@/components/AdminJobListItem";
+import { useListControls } from "@/hooks/useListControls";
+import { matchesSearch } from "@/src/lib/shiftFilters";
 
-type SortKey = "event" | "posted";
-type StatusFilter = "all" | "open" | "completed" | "cancelled";
+type StatusTab = "active" | "completed" | "cancelled" | "all";
+type AdminSort = "event-asc" | "event-desc" | "posted-desc" | "posted-asc";
 
-const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "open", label: "Active" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
+const TABS: { label: string; value: StatusTab }[] = [
+  { label: "Active", value: "active" },
+  { label: "Completed", value: "completed" },
+  { label: "Cancelled", value: "cancelled" },
+  { label: "All", value: "all" },
 ];
+const SORTS: { label: string; value: AdminSort }[] = [
+  { label: "Event date, soonest first", value: "event-asc" },
+  { label: "Event date, latest first", value: "event-desc" },
+  { label: "Posted, newest first", value: "posted-desc" },
+  { label: "Posted, oldest first", value: "posted-asc" },
+];
+const NOUN: Record<StatusTab, string> = { active: "active shifts", completed: "completed shifts", cancelled: "cancelled shifts", all: "shifts" };
 
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className={`px-3 py-1.5 rounded-full border ${active ? "bg-primary border-primary" : "border-outline bg-surface"}`}
-    >
-      <Text className={`text-label-medium ${active ? "text-on-primary" : "text-on-surface-variant"}`}>{label}</Text>
-    </Pressable>
-  );
+// Active = still running: open (needs workers) or closed (full) and not yet completed or cancelled.
+const isLive = (j: Job) => j.status === "open" || j.status === "closed";
+const inTab = (j: Job, tab: StatusTab) => tab === "all" || (tab === "active" ? isLive(j) : j.status === tab);
+
+// shortcut: search, filter and sort run on the loaded list; move to Supabase query params if an admin's job count grows large
+function sortJobs(jobs: Job[], key: AdminSort): Job[] {
+  const field = key.startsWith("event") ? (j: Job) => `${j.date} ${j.startTime}` : (j: Job) => j.createdAt;
+  const sorted = [...jobs].sort((a, b) => field(a).localeCompare(field(b)));
+  return key.endsWith("desc") ? sorted.reverse() : sorted;
 }
 
 export default function AdminHomeScreen() {
-  const { user } = useAuthStore();
-  const { adminJobList, getAdminJobs, isLoading, error, savedJobIds, getSavedJobs, toggleSaveJob } = useJobStore();
   const router = useRouter();
-
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("event");
-  const [ascending, setAscending] = useState(true);
-  const [status, setStatus] = useState<StatusFilter>("all");
-  const [fromDate, setFromDate] = useState<string | null>(null);
-  const [toDate, setToDate] = useState<string | null>(null);
-  const [picking, setPicking] = useState<"from" | "to" | null>(null);
+  const { user } = useAuthStore();
+  const { adminJobList, getAdminJobs, isLoading, error, getSavedJobs } = useJobStore();
+  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<StatusTab>("active");
+  const c = useListControls<AdminSort>("event-asc");
+  const [fabExtended, setFabExtended] = useState(true);
+  const lastY = useRef(0);
 
   useEffect(() => {
-    if (user?.id) {
-      getAdminJobs(user.id);
-      getSavedJobs(user.id);
-    }
-  }, [user?.id]);
+    if (!user?.id) return;
+    getAdminJobs(user.id);
+    getSavedJobs(user.id);
+  }, [user?.id, getAdminJobs, getSavedJobs]);
 
-  // shortcut: client-side search/filter/sort, move to Supabase query params if an admin's job count grows large
-  const jobs = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const filtered = adminJobList.filter(
-      (j) =>
-        (!q || j.companyName.toLowerCase().includes(q) || j.locationAddress.toLowerCase().includes(q)) &&
-        (status === "all" || j.status === status) &&
-        (!fromDate || j.date >= fromDate) &&
-        (!toDate || j.date <= toDate)
-    );
-    const key = sortKey === "event" ? "date" : "createdAt";
-    return filtered.sort((a, b) => a[key].localeCompare(b[key]) * (ascending ? 1 : -1));
-  }, [adminJobList, search, status, fromDate, toDate, sortKey, ascending]);
+  const reload = () => user?.id && getAdminJobs(user.id);
+  const needWorkers = adminJobList.filter((j) => isLive(j) && jobSlots(j).open > 0).length;
+  const visible = sortJobs(adminJobList.filter((j) => inTab(j, tab) && matchesSearch(j, query)), c.sort);
+  const count = visible.length;
+
+  // Extended FAB collapses to an icon while the list scrolls down and expands again on scroll up
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastY.current;
+    lastY.current = y;
+    if (y <= 0 || dy < -4) setFabExtended(true);
+    else if (dy > 4) setFabExtended(false);
+  };
+
+  const empty = error ? (
+    <EmptyState icon="cloud_off" title="Couldn't load your shifts" body={error} actionLabel="Try again" onAction={reload} />
+  ) : query.trim() ? (
+    <EmptyState icon="search" title={`No shifts match "${query.trim()}"`} body="Try another company or area, or clear the search." actionLabel="Clear search" onAction={() => setQuery("")} />
+  ) : adminJobList.length === 0 ? (
+    <EmptyState icon="post_add" title="No shifts posted yet" body="Post your first shift. Workers with a matching role will see it right away." />
+  ) : (
+    <EmptyState icon="event_busy" title={`No ${NOUN[tab]}`} body="Shifts in this list will show up here." />
+  );
 
   return (
-    <View className="flex-1 bg-background pt-16 px-6">
-      <Text className="text-headline-medium font-bold text-on-surface mb-4">My Jobs</Text>
-
-      <SearchBar value={search} onChangeText={setSearch} placeholder="Search company or location..." />
-
-      <View className="flex-row flex-wrap gap-2 mt-4">
-        {STATUS_FILTERS.map((f) => (
-          <Chip key={f.value} label={f.label} active={status === f.value} onPress={() => setStatus(f.value)} />
-        ))}
-      </View>
-
-      <View className="flex-row flex-wrap items-center gap-2 mt-3">
-        <Chip label={fromDate ? `From ${formatDate(fromDate)}` : "From date"} active={!!fromDate} onPress={() => setPicking("from")} />
-        <Chip label={toDate ? `To ${formatDate(toDate)}` : "To date"} active={!!toDate} onPress={() => setPicking("to")} />
-        {(fromDate || toDate) && (
-          <Pressable onPress={() => { setFromDate(null); setToDate(null); }} hitSlop={8}>
-            <MaterialCommunityIcons name="close-circle" size={20} color="#747775" />
-          </Pressable>
+    <Screen>
+      <TopAppBarLarge
+        title="My jobs"
+        supportingText={needWorkers ? `${needWorkers} ${needWorkers === 1 ? "shift still needs" : "shifts still need"} workers` : undefined}
+      />
+      <FlatList
+        data={visible}
+        keyExtractor={(j) => j.id}
+        keyboardShouldPersistTaps="handled"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        refreshing={isLoading && adminJobList.length > 0}
+        onRefresh={reload}
+        contentContainerClassName="px-4 pb-28 pt-2"
+        ItemSeparatorComponent={() => <View className="h-3" />}
+        ListHeaderComponent={
+          <View className="gap-3 pb-3">
+            <SearchBar value={query} onChangeText={setQuery} placeholder="Search company or location" />
+            <Tabs tabs={TABS} value={tab} onChange={setTab} />
+            {adminJobList.length > 0 && (
+              <Subheader
+                label={`${count} ${count === 1 ? NOUN[tab].replace(/s$/, "") : NOUN[tab]}`}
+                trailing={
+                  <View ref={c.sortRef} collapsable={false}>
+                    <AssistChip icon="swap_vert" label={c.sort.startsWith("event") ? "Event date" : "Posted"} onPress={c.openSort} />
+                  </View>
+                }
+              />
+            )}
+          </View>
+        }
+        ListEmptyComponent={isLoading ? <ActivityIndicator className="py-12" color={colors.primary} /> : empty}
+        renderItem={({ item }) => (
+          <AdminJobListItem job={item} onPress={() => router.push({ pathname: "/admin-job/[id]", params: { id: item.id } })} />
         )}
-      </View>
-
-      <View className="flex-row items-center gap-2 mt-3 mb-4">
-        <Text className="text-label-medium text-on-surface-variant">Sort:</Text>
-        <Chip label="Event date" active={sortKey === "event"} onPress={() => setSortKey("event")} />
-        <Chip label="Post date" active={sortKey === "posted"} onPress={() => setSortKey("posted")} />
-        <Pressable
-          onPress={() => setAscending((a) => !a)}
-          accessibilityLabel={ascending ? "Sort ascending" : "Sort descending"}
-          hitSlop={8}
-          className="ml-auto p-1"
-        >
-          <MaterialCommunityIcons name={ascending ? "sort-ascending" : "sort-descending"} size={24} color="#747775" />
-        </Pressable>
-      </View>
-
-      {picking && (
-        <DateTimePicker
-          mode="date"
-          value={new Date(((picking === "from" ? fromDate : toDate) ?? toYmd(new Date())) + "T00:00:00")}
-          onChange={(event, date) => {
-            setPicking(null);
-            if (event.type !== "set" || !date) return;
-            (picking === "from" ? setFromDate : setToDate)(toYmd(date));
-          }}
-        />
-      )}
-
-      {isLoading && adminJobList.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" />
-        </View>
-      ) : error && adminJobList.length === 0 ? (
-        <View className="flex-1 items-center justify-center gap-3">
-          <Text className="text-body-medium text-error text-center">{error}</Text>
-          <Pressable onPress={() => user?.id && getAdminJobs(user.id)}>
-            <Text className="text-label-large text-primary font-bold">Retry</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FlatList
-          data={jobs}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          refreshing={isLoading}
-          onRefresh={() => user?.id && getAdminJobs(user.id)}
-          ListEmptyComponent={
-            <Text className="text-body-medium text-on-surface-variant text-center mt-12">
-              {adminJobList.length ? "No jobs match your filters." : "You haven't posted any jobs yet."}
-            </Text>
-          }
-          renderItem={({ item }) => (
-            <JobCard
-              companyName={item.companyName}
-              location={item.locationAddress}
-              createdAt={item.date ? formatDate(item.date) : getFormattedDate(item.createdAt)}
-              wage={item.jobRoles?.[0]?.wageInr ?? 0}
-              status={item.status}
-              isSaved={savedJobIds.includes(item.id)}
-              onSaveToggle={() => user?.id && toggleSaveJob(item, user.id)}
-              onPress={() => router.push({ pathname: "/admin-job/[id]", params: { id: item.id } })}
-              className="mb-4"
-            />
-          )}
-        />
-      )}
-
-      <Pressable
-        onPress={() => router.push("/admin-job/new")}
-        accessibilityLabel="Post a new job"
-        className="absolute bottom-6 right-6 w-14 h-14 rounded-2xl bg-primary items-center justify-center shadow-lg active:opacity-90"
-      >
-        <MaterialCommunityIcons name="plus" size={28} color="#FFFFFF" />
-      </Pressable>
-    </View>
+      />
+      <Fab label="Post a shift" icon="add" extended={fabExtended} onPress={() => router.push("/admin-job/new")} className="absolute bottom-4 right-4" />
+      <Menu anchor={c.sortAnchor} options={SORTS} value={c.sort} onSelect={c.setSort} onDismiss={c.closeSort} />
+    </Screen>
   );
 }

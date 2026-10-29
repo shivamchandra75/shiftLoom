@@ -1,65 +1,93 @@
 import React, { useEffect } from "react";
-import { View, Text, FlatList, ActivityIndicator } from "react-native";
-import { useAuthStore } from "@/src/store/useAuthStore";
-import { useJobStore } from "@/src/store/useJobStore";
-import { JobCard } from "@/components/JobCard";
+import { ActivityIndicator, FlatList, View } from "react-native";
 import { useRouter } from "expo-router";
-import { getFormattedDate } from "@/src/lib/utils";
+import { useJobStore } from "@/src/store/useJobStore";
+import { useAuthStore } from "@/src/store/useAuthStore";
+import type { Job } from "@/src/services/jobService";
+import { colors } from "@/src/theme/tokens";
+import { Screen } from "@/components/ui/Screen";
+import { TopAppBarLarge } from "@/components/ui/TopAppBar";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { FloatingToolbar } from "@/components/ui/FloatingToolbar";
+import { Menu } from "@/components/ui/Menu";
+import { JobListItem } from "@/components/JobListItem";
+import { FilterSheet } from "@/components/FilterSheet";
+import { useListControls } from "@/hooks/useListControls";
+import { NO_FILTERS, SORT_OPTIONS, ShiftFilters, SortKey, filterCount, matchesFilters, roleWage, sortJobs, sortLabel } from "@/src/lib/shiftFilters";
+
+const SAVED_SORT: { label: string; value: SortKey }[] = [{ label: "Recently saved", value: "saved" }, ...SORT_OPTIONS];
 
 export default function SavedJobsScreen() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const { savedJobList, getSavedJobs, toggleSaveJob, isLoading } = useJobStore();
-  const router = useRouter();
+  const c = useListControls("saved");
+  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
-    if (user?.id) {
-      getSavedJobs(user.id);
-    }
-  }, [user?.id]);
+    if (user?.id) getSavedJobs(user.id);
+  }, [user?.id, getSavedJobs]);
 
-  console.log('💾 saved job',savedJobList?.[0]);
+  const wageOf = (j: Job) => roleWage(j, user?.role);
+  const matching = (f: ShiftFilters) => savedJobList.filter((j) => matchesFilters(j, f, wageOf(j)));
+  const visible = sortJobs(matching(c.filters), c.sort, (j) => ({ date: j.date, startTime: j.startTime, wage: wageOf(j) }));
+  const count = savedJobList.length;
 
   return (
-    <View className="flex-1 bg-background pt-16 px-6">
-      <Text className="text-headline-medium font-bold text-on-surface mb-6">Saved Shifts</Text>
-
-      {isLoading && savedJobList.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" />
-        </View>
-      ) : (
-        <FlatList
-          data={savedJobList}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View className="items-center justify-center mt-12 px-4">
-              <Text className="text-title-medium font-semibold text-on-surface text-center mb-1">
-                No saved shifts yet
-              </Text>
-              <Text className="text-body-medium text-on-surface-variant text-center">
-                Bookmark shifts you're interested in from the job details page to keep track of them here.
-              </Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <JobCard
-              companyName={item.companyName}
-              location={item.locationAddress}
-              createdAt={getFormattedDate(item.createdAt)}
-              wage={item.jobRoles?.[0]?.wageInr ?? 0}
-              isSaved={true}
-              onSaveToggle={() => {
-                if (user?.id) {
-                  toggleSaveJob(item, user.id);
-                }
-              }}
-              onPress={() => router.push({ pathname: user?.role === 'admin' ? '/admin-job/[id]' : '/job/[id]', params: { id: item.id } })}
-              className="mb-4"
+    <Screen>
+      <TopAppBarLarge title="Saved" supportingText={count ? `${count} ${count === 1 ? "shift" : "shifts"}` : undefined} />
+      <FlatList
+        data={visible}
+        keyExtractor={(j) => j.id}
+        contentContainerClassName="px-4 pt-2 pb-24"
+        ItemSeparatorComponent={() => <View className="h-3" />}
+        ListEmptyComponent={
+          isLoading && count === 0 ? (
+            <ActivityIndicator className="py-12" color={colors.primary} />
+          ) : count > 0 ? (
+            <EmptyState icon="filter_list" title="No saved shifts match your filters" body="Remove a filter to see more shifts." actionLabel="Clear filters" onAction={() => c.setFilters(NO_FILTERS)} />
+          ) : (
+            <EmptyState
+              icon="bookmark_border"
+              title="No saved shifts yet"
+              body="Tap the bookmark on any shift to keep it here."
+              actionLabel="Browse shifts"
+              onAction={() => router.navigate(isAdmin ? "/(admin)" : "/(tabs)")}
             />
-          )}
-        />
+          )
+        }
+        renderItem={({ item }) => (
+          <JobListItem
+            job={item}
+            wage={wageOf(item)}
+            saved
+            onToggleSave={() => user?.id && toggleSaveJob(item, user.id)}
+            onPress={() => router.push({ pathname: isAdmin ? "/admin-job/[id]" : "/job/[id]", params: { id: item.id } })}
+          />
+        )}
+      />
+      {count > 0 && (
+        <View className="absolute bottom-4 left-0 right-0">
+          <FloatingToolbar
+            sortRef={c.sortRef}
+            sortLabel={sortLabel(c.sort)}
+            onSortPress={c.openSort}
+            onFilterPress={() => c.setFilterOpen(true)}
+            filterCount={filterCount(c.filters)}
+          />
+        </View>
       )}
-    </View>
+      <FilterSheet
+        visible={c.filterOpen}
+        value={c.filters}
+        countFor={(f) => matching(f).length}
+        onApply={(f) => {
+          c.setFilters(f);
+          c.setFilterOpen(false);
+        }}
+        onDismiss={() => c.setFilterOpen(false)}
+      />
+      <Menu anchor={c.sortAnchor} placement="above" options={SAVED_SORT} value={c.sort} onSelect={c.setSort} onDismiss={c.closeSort} />
+    </Screen>
   );
 }

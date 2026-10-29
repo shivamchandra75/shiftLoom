@@ -1,108 +1,121 @@
-import React, { useEffect } from "react";
-import { View, Text, ScrollView, FlatList, Pressable } from "react-native";
-import { useAuthStore } from "@/src/store/useAuthStore";
-import { JobCard } from "@/components/JobCard";
-import { useJobStore } from "@/src/store/useJobStore";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, View } from "react-native";
 import { useRouter } from "expo-router";
-import { getFormattedDate } from "@/src/lib/utils";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-
+import { useAuthStore } from "@/src/store/useAuthStore";
+import { useJobStore } from "@/src/store/useJobStore";
+import { colors } from "@/src/theme/tokens";
+import { Screen } from "@/components/ui/Screen";
+import { TopAppBarLarge } from "@/components/ui/TopAppBar";
+import { IconButton } from "@/components/ui/IconButton";
+import { SearchBar } from "@/components/ui/search-bar";
+import { AssistChip } from "@/components/ui/Chip";
+import { ListItem, Panel, Subheader } from "@/components/ui/ListItem";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Menu } from "@/components/ui/Menu";
+import { JobListItem } from "@/components/JobListItem";
+import { FilterSheet } from "@/components/FilterSheet";
+import { useListControls } from "@/hooks/useListControls";
+import { NO_FILTERS, SORT_OPTIONS, ShiftFilters, filterCount, matchesFilters, matchesSearch, roleWage, sortJobs, sortLabel } from "@/src/lib/shiftFilters";
 
 export default function HomeScreen() {
-  const { user } = useAuthStore();
-  const {
-    getJobs,
-    isLoading: isJobLoading,
-    jobList,
-    getSavedJobs,
-    savedJobIds,
-    toggleSaveJob
-  } = useJobStore();
   const router = useRouter();
-
-  // console.log(jobList?.[0]);
+  const { user } = useAuthStore();
+  const { getJobs, isLoading, error, jobList, getSavedJobs, savedJobIds, toggleSaveJob } = useJobStore();
+  const [query, setQuery] = useState("");
+  const c = useListControls("date-asc");
 
   useEffect(() => {
-    if (user?.role && user.role !== 'admin') getJobs(user.role);
+    if (user?.role && user.role !== "admin") getJobs(user.role);
     if (user?.id) getSavedJobs(user.id);
-  }, [user?.role, user?.id]);
+  }, [user?.role, user?.id, getJobs, getSavedJobs]);
+
+  const wageOf = (j: (typeof jobList)[number]) => roleWage(j, user?.role);
+  const matching = (f: ShiftFilters) => jobList.filter((j) => matchesSearch(j, query) && matchesFilters(j, f, wageOf(j)));
+  const visible = sortJobs(matching(c.filters), c.sort, (j) => ({ date: j.date, startTime: j.startTime, wage: wageOf(j) }));
+  const activeFilters = filterCount(c.filters);
+  const role = user?.role ? `${user.role}s` : "you";
+
+  const listLabel = query.trim()
+    ? `${visible.length} ${visible.length === 1 ? "shift" : "shifts"} in ${query.trim()}`
+    : activeFilters
+      ? `${visible.length} ${visible.length === 1 ? "shift matches" : "shifts match"} your filters`
+      : "Available shifts";
+
+  const empty = error ? (
+    <EmptyState icon="cloud_off" title="Couldn't load shifts" body={error} actionLabel="Try again" onAction={() => user?.role && user.role !== "admin" && getJobs(user.role)} />
+  ) : query.trim() ? (
+    <EmptyState icon="search" title={`No shifts in ${query.trim()}`} body="Try a nearby area, or clear the search to see all available shifts." actionLabel="Clear search" onAction={() => setQuery("")} />
+  ) : activeFilters ? (
+    <EmptyState icon="filter_list" title="No shifts match your filters" body="Remove a filter to see more shifts." actionLabel="Clear filters" onAction={() => c.setFilters(NO_FILTERS)} />
+  ) : (
+    <EmptyState icon="event_available" title="No shifts right now" body={`New shifts for ${role} show up here. Check back soon.`} />
+  );
 
   return (
-    <ScrollView
-      className="flex-grow bg-background"
-      contentContainerClassName="flex-grow px-6 py-12 justify-center"
-    >
-      <View className="gap-8 max-w-md w-full self-center">
-        {/* Top Header Bar */}
-        <View className="flex-row justify-between items-center">
-          <View>
-            <Text className="text-body-medium text-on-surface-variant">Welcome back,</Text>
-            <Text className="text-headline-small font-bold text-on-surface">{user?.firstName || 'User'}</Text>
-          </View>
-          <Pressable
-            onPress={() => router.push('/notifications')}
-            className="w-12 h-12 rounded-full border border-outline bg-surface items-center justify-center active:opacity-70"
-          >
-            <MaterialCommunityIcons name="bell-outline" size={24} color="#747775" />
-          </Pressable>
-        </View>
-
-        <View className="bg-surface border border-outline rounded-3xl p-6 gap-4">
-          <Text className="text-title-large text-on-surface font-bold border-b border-outline pb-2">
-            Account Profile
-          </Text>
-
-          <View className="flex-row justify-between items-center">
-            <Text className="text-body-medium text-on-surface-variant">Email</Text>
-            <Text className="text-body-medium text-on-surface font-medium">{user?.firstName}</Text>
-          </View>
-
-          <View className="flex-row justify-between items-center">
-            <Text className="text-body-medium text-on-surface-variant">User Role</Text>
-            <View className="bg-secondary px-3 py-1 rounded-full border border-outline">
-              <Text className="text-label-medium text-on-secondary font-bold capitalize">
-                {user?.role}
-              </Text>
-            </View>
-          </View>
-
-          <View className="flex-row justify-between items-center">
-            <Text className="text-body-medium text-on-surface-variant">Verification Status</Text>
-            <View
-              className={`px-3 py-1 rounded-full ${user?.isVerified ? "bg-success" : "bg-warning"
-                }`}
-            >
-              <Text className="text-label-medium text-on-primary font-bold">
-                {user?.isVerified ? "Verified" : "Pending"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Available Shifts Section */}
-        <View className="gap-4">
-          <Text className="text-title-medium text-on-surface font-bold">
-            Available Shifts
-          </Text>
-          <FlatList
-            data={jobList}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <JobCard
-                companyName={item.companyName}
-                location={item.locationAddress}
-                createdAt={getFormattedDate(item.createdAt)}
-                wage={item?.jobRoles?.[0].wageInr}
-                isSaved={savedJobIds.includes(item.id)}
-                onSaveToggle={() => user?.id && toggleSaveJob(item, user.id)}
-                onPress={() => router.push({ pathname: '/job/[id]', params: { id: item.id } })}
-                className="mb-3"
-              />
+    <Screen>
+      <TopAppBarLarge
+        title={`Hi, ${user?.firstName || "there"}`}
+        supportingText={`Shifts open for ${role} near you`}
+        trailing={<IconButton icon="notifications" accessibilityLabel="Notifications" onPress={() => router.push("/notifications")} />}
+      />
+      <FlatList
+        data={visible}
+        keyExtractor={(j) => j.id}
+        keyboardShouldPersistTaps="handled"
+        contentContainerClassName="px-4 pb-6 pt-2"
+        ItemSeparatorComponent={() => <View className="h-3" />}
+        ListHeaderComponent={
+          <View className="gap-3 pb-3">
+            {!user?.isVerified && (
+              <Panel>
+                <ListItem
+                  leadingIcon="verified_user"
+                  leadingTone="warning"
+                  headline="Verify your account"
+                  supportingText="Upload your documents to start accepting shifts"
+                  trailingIcon="chevron_right"
+                  onPress={() => router.navigate("/(tabs)/profile")}
+                />
+              </Panel>
             )}
-            scrollEnabled={false}
+            <SearchBar value={query} onChangeText={setQuery} />
+            <View className="flex-row gap-2">
+              <AssistChip
+                icon="tune"
+                label={activeFilters ? `Filters (${activeFilters})` : "Filter"}
+                selected={activeFilters > 0}
+                showDropdown={false}
+                onPress={() => c.setFilterOpen(true)}
+              />
+              <View ref={c.sortRef} collapsable={false}>
+                <AssistChip icon="swap_vert" label={sortLabel(c.sort)} onPress={c.openSort} />
+              </View>
+            </View>
+            <Subheader label={listLabel} />
+          </View>
+        }
+        ListEmptyComponent={isLoading ? <ActivityIndicator className="py-12" color={colors.primary} /> : empty}
+        renderItem={({ item }) => (
+          <JobListItem
+            job={item}
+            wage={wageOf(item)}
+            saved={savedJobIds.includes(item.id)}
+            onToggleSave={() => user?.id && toggleSaveJob(item, user.id)}
+            onPress={() => router.push({ pathname: "/job/[id]", params: { id: item.id } })}
           />
-        </View>
-      </View>
-    </ScrollView>
+        )}
+      />
+      <FilterSheet
+        visible={c.filterOpen}
+        value={c.filters}
+        countFor={(f) => matching(f).length}
+        onApply={(f) => {
+          c.setFilters(f);
+          c.setFilterOpen(false);
+        }}
+        onDismiss={() => c.setFilterOpen(false)}
+      />
+      <Menu anchor={c.sortAnchor} options={SORT_OPTIONS} value={c.sort} onSelect={c.setSort} onDismiss={c.closeSort} />
+    </Screen>
   );
 }

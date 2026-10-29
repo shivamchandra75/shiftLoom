@@ -1,49 +1,62 @@
 import React from "react";
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { ActivityIndicator, Pressable, View } from "react-native";
+import { colors, elevation } from "@/src/theme/tokens";
+import { Text } from "@/components/ui/Text";
+import { Icon } from "@/components/ui/Icon";
 
-interface SuggestionListProps<T> {
-  items: T[];
-  loading: boolean;
-  error: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  labelOf: (item: T) => string;
-  onSelect: (item: T) => void;
-  emptyText?: string;
-  footer?: string;
+export interface Suggestion {
+  key: string;
+  title: string;
+  subtitle?: string;
+  icon: string;
+  /** Primary-colored row, e.g. "Add new company". */
+  accent?: boolean;
 }
 
-// Dropdown-style results under an autocomplete input. Plain Views (not FlatList) so it can sit inside a ScrollView.
-export function SuggestionList<T>({ items, loading, error, icon, labelOf, onSelect, emptyText, footer }: SuggestionListProps<T>) {
-  if (!loading && !error && items.length === 0 && !emptyText) return null;
+// Menu/Company suggestions (Figma 253:2918): results under a field while typing. Plain Views (not a
+// FlatList) so it can sit inside a ScrollView.
+export function SuggestionList({
+  items,
+  loading = false,
+  error = "",
+  emptyText,
+  footer,
+  onSelect,
+}: {
+  items: Suggestion[];
+  loading?: boolean;
+  error?: string;
+  emptyText?: string;
+  footer?: string;
+  onSelect: (item: Suggestion) => void;
+}) {
+  const message = error || (loading && items.length === 0 ? "Searching…" : items.length === 0 ? emptyText : "");
+  if (!message && items.length === 0) return null;
 
   return (
-    <View className="border border-outline rounded-2xl overflow-hidden bg-surface">
-      {loading && items.length === 0 ? (
-        <View className="flex-row items-center gap-3 p-4">
-          <ActivityIndicator size="small" />
-          <Text className="text-body-medium text-on-surface-variant">Searching…</Text>
+    <View style={elevation.raised} className="overflow-hidden rounded-lg bg-surface py-2">
+      {message ? (
+        <View className="flex-row items-center gap-3 px-4 py-3">
+          {loading && !error && <ActivityIndicator size="small" color={colors.primary} />}
+          <Text variant="body-medium" color={error ? "error" : "on-surface-variant"} className="flex-1">{message}</Text>
         </View>
-      ) : error ? (
-        <Text className="p-4 text-body-medium text-error">{error}</Text>
-      ) : items.length === 0 ? (
-        <Text className="p-4 text-body-medium text-on-surface-variant">{emptyText}</Text>
       ) : (
-        items.map((item, i) => (
+        items.map((item) => (
           <Pressable
-            key={`${labelOf(item)}-${i}`}
+            key={item.key}
             onPress={() => onSelect(item)}
             accessibilityRole="button"
-            className={`flex-row items-center gap-3 px-4 py-3 min-h-[48px] active:bg-surface-variant ${i ? "border-t border-outline" : ""}`}
+            className="flex-row items-center gap-4 px-4 py-2.5 active:bg-on-surface/5"
           >
-            <MaterialCommunityIcons name={icon} size={20} color="#747775" />
-            <Text className="flex-1 text-body-medium text-on-surface" numberOfLines={2}>{labelOf(item)}</Text>
+            <Icon name={item.icon} size={20} color={item.accent ? "primary" : "on-surface-variant"} />
+            <View className="flex-1">
+              <Text variant="body-large" color={item.accent ? "primary" : "on-surface"} numberOfLines={2}>{item.title}</Text>
+              {!!item.subtitle && <Text variant="body-small" color="on-surface-variant" numberOfLines={1}>{item.subtitle}</Text>}
+            </View>
           </Pressable>
         ))
       )}
-      {!!footer && items.length > 0 && (
-        <Text className="px-4 py-2 text-label-small text-on-surface-variant border-t border-outline">{footer}</Text>
-      )}
+      {!!footer && items.length > 0 && <Text variant="label-small" color="on-surface-variant" className="px-4 pb-1 pt-2">{footer}</Text>}
     </View>
   );
 }

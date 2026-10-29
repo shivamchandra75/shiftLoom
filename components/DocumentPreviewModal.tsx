@@ -1,18 +1,27 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, Modal, ActivityIndicator, ScrollView } from "react-native";
+import { View, Modal, ActivityIndicator, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { File, Paths } from "expo-file-system";
 import { WebView } from "react-native-webview";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { colors } from "@/src/theme/tokens";
 import { getDocumentUrl } from "@/src/services/verificationService";
+import { Text } from "@/components/ui/Text";
+import { Icon } from "@/components/ui/Icon";
+import { IconButton } from "@/components/ui/IconButton";
+import { Button } from "@/components/ui/button";
 
 export interface PreviewableDocument {
   id: string;
   title: string;
   fileName: string;
+  /** Storage path of an uploaded file. Ignored when localUri is set. */
   filePath: string;
   mimeType: string;
+  /** A file picked on this device that hasn't been sent yet. */
+  localUri?: string;
+  /** Line under the title, e.g. "culinary-degree.pdf, 1.2 MB, not sent yet". Defaults to the file name. */
+  subtitle?: string;
 }
 
 // pdf.js renders every page to a canvas; the PDF bytes are injected as base64 so the private file
@@ -20,7 +29,7 @@ export interface PreviewableDocument {
 const PDF_JS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174";
 const pdfHtml = (base64: string) => `<!doctype html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4">
-<style>body{margin:0;background:#E3E3E3}canvas{display:block;width:100%;height:auto;margin:0 0 8px;background:#fff}</style>
+<style>body{margin:0;background:${colors["surface-container-high"]}}canvas{display:block;width:100%;height:auto;margin:0 0 8px;background:#fff}</style>
 <script src="${PDF_JS}/pdf.min.js"></script></head><body><script>
 const post = (m) => window.ReactNativeWebView.postMessage(JSON.stringify(m));
 try {
@@ -44,7 +53,21 @@ try {
 
 type Source = { kind: "image"; uri: string } | { kind: "pdf"; html: string };
 
-export function DocumentPreviewModal({ doc, onClose }: { doc: PreviewableDocument | null; onClose: () => void }) {
+// Document preview (Figma 268:2989). Before sending: pass onChooseAnother/onKeep for the bottom bar.
+// Uploaded: pass status (e.g. a StatusChip) to show the review state.
+export function DocumentPreviewModal({
+  doc,
+  onClose,
+  status,
+  onChooseAnother,
+  onKeep,
+}: {
+  doc: PreviewableDocument | null;
+  onClose: () => void;
+  status?: React.ReactNode;
+  onChooseAnother?: () => void;
+  onKeep?: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState("");
@@ -61,8 +84,14 @@ export function DocumentPreviewModal({ doc, onClose }: { doc: PreviewableDocumen
 
     (async () => {
       try {
+        const isPdf = doc.mimeType === "application/pdf";
+        if (doc.localUri) {
+          const html = isPdf ? pdfHtml(await new File(doc.localUri).base64()) : null;
+          if (!cancelled) setSource(html ? { kind: "pdf", html } : { kind: "image", uri: doc.localUri });
+          return;
+        }
         const url = await getDocumentUrl(doc.filePath);
-        if (doc.mimeType !== "application/pdf") {
+        if (!isPdf) {
           if (!cancelled) setSource({ kind: "image", uri: url });
           return;
         }
@@ -86,27 +115,26 @@ export function DocumentPreviewModal({ doc, onClose }: { doc: PreviewableDocumen
     };
   }, [doc, attempt]);
 
+  const hasActions = !!onChooseAnother && !!onKeep;
+
   return (
     <Modal visible={!!doc} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View className="flex-1 bg-on-surface" style={{ paddingTop: insets.top }}>
-        <View className="flex-row items-center gap-3 px-4 py-3">
-          <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close preview" className="p-1">
-            <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
-          </Pressable>
+      <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
+        <View className="flex-row items-center gap-1 px-4 py-2">
+          <IconButton icon="close" accessibilityLabel="Close preview" onPress={onClose} />
           <View className="flex-1">
-            <Text className="text-title-medium font-bold text-on-primary" numberOfLines={1}>{doc?.title}</Text>
-            <Text className="text-body-small text-outline" numberOfLines={1}>{doc?.fileName}</Text>
+            <Text variant="title-medium" numberOfLines={1}>{doc?.title}</Text>
+            <Text variant="body-small" color="on-surface-variant" numberOfLines={1}>{doc?.subtitle ?? doc?.fileName}</Text>
           </View>
+          {status}
         </View>
 
-        <View className="flex-1 bg-surface-variant" style={{ paddingBottom: insets.bottom }}>
+        <View className="flex-1 bg-surface-container-high" style={hasActions ? undefined : { paddingBottom: insets.bottom }}>
           {error ? (
             <View className="flex-1 items-center justify-center gap-3 px-8">
-              <MaterialCommunityIcons name="file-alert-outline" size={40} color="#B3261E" />
-              <Text className="text-body-medium text-on-surface text-center">{error}</Text>
-              <Pressable onPress={() => setAttempt((a) => a + 1)}>
-                <Text className="text-label-large font-bold text-primary">Retry</Text>
-              </Pressable>
+              <Icon name="error" size={40} color="error" />
+              <Text variant="body-medium" className="text-center">{error}</Text>
+              <Button variant="text" label="Retry" onPress={() => setAttempt((a) => a + 1)} />
             </View>
           ) : source?.kind === "image" ? (
             // ScrollView zoom gives pinch-to-zoom on iOS; Android shows the image fitted to the screen
@@ -129,16 +157,23 @@ export function DocumentPreviewModal({ doc, onClose }: { doc: PreviewableDocumen
                 if (msg.type === "loaded") setRendering(false);
                 else if (msg.type === "error") setError(`Couldn't display this PDF. ${msg.message}`);
               }}
-              style={{ flex: 1, backgroundColor: "#E3E3E3" }}
+              style={{ flex: 1, backgroundColor: colors["surface-container-high"] }}
             />
           ) : null}
 
           {!error && rendering && (
             <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-              <ActivityIndicator size="large" />
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
           )}
         </View>
+
+        {hasActions && (
+          <View className="flex-row gap-2 bg-surface px-4 pt-4" style={{ paddingBottom: 16 + insets.bottom }}>
+            <Button variant="outlined" label="Choose another file" onPress={onChooseAnother} className="flex-1" />
+            <Button label="Keep file" onPress={onKeep} className="flex-1" />
+          </View>
+        )}
       </View>
     </Modal>
   );

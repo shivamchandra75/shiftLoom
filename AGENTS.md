@@ -2,32 +2,22 @@
 # AGENTS.md
 
 Instructions for AI coding agents (Claude Code, Cursor, Codex, etc.) working in this repository.
-This is a **living document** — update it as real decisions get made (navigation, state
-management, backend, etc.). Sections marked `[PLACEHOLDER]` should be edited once decided
-and the placeholder note removed.
+Project overview, stack and commands are in `CLAUDE.md`; the real filesystem and `package.json`
+are the ground truth for structure and scripts.
 
 ---
 # Expo HAS CHANGED
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before writing any code.
 
-## 1. Project Overview
-
-- **Name:** [PLACEHOLDER — project name]
-- **Purpose:** [PLACEHOLDER — one or two sentences on what this app does]
-- **Stack:** Expo (managed workflow), React Native, TypeScript, npm
-- **Status:** Greenfield project, built from scratch
-
----
-
-## 2. Ground Rules — Read Before Doing Anything
+## 1. Ground Rules — Read Before Doing Anything
 
 These exist specifically to stop the agent from guessing. If any rule below can't be followed
 because information is missing, **stop and ask**, or say explicitly that something is unverified,
 rather than presenting a guess as fact.
 
 1. **Never assume a package is installed.** Check `package.json` `dependencies`/`devDependencies`
-   before importing anything. If it's not there, either install it properly (see §5) or ask first.
+   before importing anything. If it's not there, either install it properly (rule 3) or ask first.
 2. **Never invent file paths, component names, exports, or props.** Use the file explorer /
    `view` / `grep` to confirm the actual project structure before referencing it in code or in
    an explanation.
@@ -51,90 +41,26 @@ rather than presenting a guess as fact.
 
 ---
 
-## 3. Tech Stack
+## 2. Coding Standards
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Framework | Expo (managed workflow) | Check exact SDK version in `package.json` / `app.json` — it will drift as the project evolves |
-| Language | TypeScript (strict mode) | No `any` without a comment justifying it |
-| Package manager | npm | Do not mix with yarn/pnpm |
-| Routing/Navigation | Expo Router (recommended default) | `[PLACEHOLDER]` — update if React Navigation is used directly instead |
-| State (local/global) | `[PLACEHOLDER]` — e.g. Zustand, Context+useReducer | Not yet decided — check package.json before assuming one is in use |
-| Server/remote state | `[PLACEHOLDER]` — e.g. TanStack Query | Not yet decided |
-| Styling | `[PLACEHOLDER]` — e.g. StyleSheet.create, NativeWind | Not yet decided |
-| Testing | Jest + `jest-expo` + React Native Testing Library | Standard for Expo projects |
-| Backend/API | `[PLACEHOLDER]` | Fill in once known |
-
----
-
-## 4. Project Structure
-
-```
-.
-├── app/                    # Expo Router routes (file-based routing)
-│   ├── (tabs)/
-│   ├── _layout.tsx
-│   └── ...
-├── src/
-│   ├── components/         # Reusable, presentational components
-│   ├── hooks/               # Custom hooks (useX naming)
-│   ├── lib/                 # Utilities, API clients, helpers
-│   ├── store/                # State management
-│   ├── types/                # Shared TypeScript types
-│   └── constants/
-├── assets/                  # Images, fonts
-├── app.json / app.config.ts
-├── package.json
-├── tsconfig.json
-├── .env.example
-└── AGENTS.md
-```
-
-If the actual structure diverges from this (it will, over time), treat the real filesystem as
-ground truth and update this section — don't keep coding against a stale diagram.
-
----
-
-## 5. Commands
-
-Verify these exist in `package.json` scripts before running; if one is missing, propose adding
-it rather than assuming.
-
-```bash
-npx expo start              # start dev server
-npx expo start -c           # start with cleared cache
-npx expo install <package>  # add a package (Expo-SDK-aware version resolution)
-npm install -D <package>    # add a pure dev dependency (no native code)
-npx tsc --noEmit            # type-check
-npm run lint                # lint (once ESLint is configured)
-npm run format               # format (once Prettier is configured)
-npm test                    # run tests
-npx expo-doctor             # check for Expo/dependency compatibility issues
-eas build --platform ios    # production build (requires EAS setup)
-eas build --platform android
-```
-
----
-
-## 6. Coding Standards
-
-- Functional components + hooks only. No class components.
 - TypeScript strict mode. Avoid `any`; if unavoidable, add a comment explaining why.
 - File naming: components `PascalCase.tsx` (one component per file), hooks `useThing.ts`,
   utilities `camelCase.ts`.
 - Prefer named exports, except Expo Router route files, which require a default export.
 - Use path aliases (e.g. `@/components/...`) via `tsconfig.json` `paths` instead of long
   relative imports (`../../../`).
-- Keep components small; extract non-trivial logic into hooks.
-- No inline styles beyond trivial one-off tweaks — use the project's chosen styling approach
-  consistently once decided (see §3).
+- No inline styles beyond trivial one-off tweaks — use NativeWind `className`.
 - Handle loading, error, and empty states explicitly for anything that fetches data — don't
   assume the happy path.
-- always use MaterialCommunityIcons first when using expo vector icons.
+- Icons: use `Icon` from `@/components/ui/Icon` (Material Symbols Rounded, Figma Material Icons names
+  like `bookmark_border`). Don't add new `@expo/vector-icons` usages.
+- Design tokens live in `src/theme/tokens.js` (colors, spacing, radius, type, elevation) and feed
+  `tailwind.config.js`. Never hardcode a hex, font size or font family in a component; add a token.
+  Use `Text` from `@/components/ui/Text` (variant + color props) instead of RN `Text`.
 
 ---
 
-## 7. Environment & Secrets
+## 3. Environment & Secrets
 
 - Never commit `.env`. Only commit `.env.example` with placeholder values.
 - Access config via `expo-constants` (`Constants.expoConfig.extra`) or env vars prefixed
@@ -145,26 +71,16 @@ eas build --platform android
 
 ---
 
-## 8. Testing
-
-- Jest + `jest-expo` preset + React Native Testing Library.
-- Co-locate tests next to the file under test (`Component.test.tsx`) or in `__tests__/`.
-- Prioritize tests for logic-heavy hooks, utilities, and business logic over trivial
-  presentational components. Don't chase 100% coverage for its own sake.
-- Run the full suite (`npm test`) before considering a task complete.
-
----
-
-## 9. Git / Commits / PRs
+## 4. Git / Commits / PRs
 
 - Use Conventional Commits: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`.
 - Keep commits and PRs small and focused on one concern.
 - Never commit: `node_modules/`, `.expo/`, build artifacts, `.env`.
-- Before opening a PR: run type-check, lint, and tests, and confirm they pass.
+- Before opening a PR: run type-check and lint (and tests, once a test runner exists), and confirm they pass.
 
 ---
 
-## 10. Things Agents Must NOT Do
+## 5. Things Agents Must NOT Do
 
 - Don't run `npx expo prebuild` (which generates native `ios`/`android` folders) without
   explicit approval — it's a meaningful workflow change, not a routine step.
@@ -179,7 +95,7 @@ eas build --platform android
 
 ---
 
-## 11. When Uncertain
+## 6. When Uncertain
 
 - If a task needs information not present in the repo (backend API shape, design specs,
   business logic details), ask rather than inventing it.
