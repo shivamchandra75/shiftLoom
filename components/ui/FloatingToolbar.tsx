@@ -28,8 +28,10 @@ export function FloatingToolbar({
             onPress={onFilterPress}
             accessibilityRole="button"
             accessibilityLabel={filtered ? `Filter, ${filterCount} applied` : "Filter"}
-            className={`flex-row items-center gap-2 rounded-full px-4 py-3 active:opacity-80 ${filtered ? "bg-surface-container" : ""}`}
+            className="flex-row items-center gap-2 rounded-full px-4 py-3 active:opacity-80"
           >
+            {/* See Tabs: a background added after mount loses its radius on Android, so only opacity changes */}
+            <View pointerEvents="none" className="absolute inset-0 rounded-full bg-surface-container" style={{ opacity: filtered ? 1 : 0 }} />
             <Icon name="filter_list" size={20} color="on-surface" />
             <Text variant="label-large">Filter</Text>
             {filtered && (

@@ -18,7 +18,6 @@ Scripts that exist: `npm start`, `npm run ios`, `npm run android`, `npm run web`
 
 ## Architecture
 
-- **Path alias:** `@/*` maps to the repo root, so imports look like `@/src/store/...`, `@/components/...`, `@/hooks/...`. Note `components/`, `hooks/`, `constants/` live at the root, not under `src/` (diverges from AGENTS.md §4).
 - **Data flow:** screen → Zustand store (`src/store/useAuthStore.ts`, `src/store/useJobStore.ts`) → service (`src/services/*Service.ts`) → Supabase client (`src/lib/supabase.ts`). Services own Supabase queries and map snake_case DB rows to camelCase types (e.g. `formatDbJob` in `jobService.ts`); stores hold loading/error flags and call services.
 - **Supabase tables in use:** `users`, `jobs`, `user_jobs` (applications, incl. cancellation reason), `saved_jobs`.
 - **Auth/routing gate:** `app/_layout.tsx` calls `useAuthStore().initialize()` and renders nothing until initialized. `NavigationGuard` redirects: no user → `(auth)/login`; user missing `role`/`firstName` → `(user)/onboarding`; otherwise → `(tabs)`. New top-level routes must be added to `inAppGroup` there or the guard will bounce users away.

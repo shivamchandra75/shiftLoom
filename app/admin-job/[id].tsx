@@ -1,160 +1,193 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, Pressable, Linking, Alert } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Linking, Platform, ScrollView, Share, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAuthStore } from "@/src/store/useAuthStore";
 import { useJobStore } from "@/src/store/useJobStore";
-import { fetchJobAssignments, JobAssignment } from "@/src/services/jobService";
-import { canCancelShift, formatDate, formatTimeTo12Hour } from "@/src/lib/utils";
-import { CancelReasonModal } from "@/components/CancelReasonModal";
+import { colors } from "@/src/theme/tokens";
+import { fetchJobAssignments, JobAssignment, JobRole } from "@/src/services/jobService";
+import { canCancelShift, formatInr, formatLongDate, formatTimeRange, shiftDateParts } from "@/src/lib/utils";
+import { Screen, BottomActionBar } from "@/components/ui/Screen";
+import { TopAppBarSmall } from "@/components/ui/TopAppBar";
+import { IconButton, BookmarkButton } from "@/components/ui/IconButton";
+import { Text } from "@/components/ui/Text";
+import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/button";
+import { StatusChip } from "@/components/ui/Chip";
+import { ListItem, Panel, Subheader } from "@/components/ui/ListItem";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Snackbar, SnackbarMessage } from "@/components/ui/snackbar";
+import { ReasonSheet } from "@/components/ReasonSheet";
+import { jobChip } from "@/components/AdminJobListItem";
 
 const CANCEL_REASONS = ["Weather", "Client cancelled", "Insufficient staff", "Venue unavailable", "Other"];
 
-const ROLE_LABELS: Record<string, string> = { driver: "Drivers", steward: "Stewards", chef: "Chefs" };
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function AdminJobDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { adminJobList, savedJobList, cancelAdminJob, isCancelling } = useJobStore();
+  const { user } = useAuthStore();
+  const { adminJobList, savedJobList, savedJobIds, toggleSaveJob, cancelAdminJob, isCancelling } = useJobStore();
   const job = adminJobList.find((j) => j.id === id) ?? savedJobList.find((j) => j.id === id);
 
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
+  const [error, setError] = useState("");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [snack, setSnack] = useState<SnackbarMessage | null>(null);
+  const hideSnack = useCallback(() => setSnack(null), []);
 
-  const load = () => {
+  const load = useCallback(() => {
     setIsLoading(true);
-    setError(null);
+    setError("");
     fetchJobAssignments(id)
       .then(setAssignments)
-      .catch((e) => setError(e?.message || "Failed to load workers"))
+      .catch((e) => setError(e?.message === "Network request failed" ? "No internet connection. Try again." : e?.message || "Couldn't load the roster."))
       .finally(() => setIsLoading(false));
-  };
+  }, [id]);
 
-  useEffect(load, [id]);
+  useEffect(load, [load]);
 
   if (!job) {
     return (
-      <View className="flex-1 bg-background items-center justify-center">
-        <Text className="text-body-medium text-on-surface-variant">Job not found.</Text>
-      </View>
+      <Screen>
+        <TopAppBarSmall />
+        <EmptyState icon="event_busy" title="Shift not found" body="It may have been removed." />
+      </Screen>
     );
   }
 
-  const isCancellable = job.status === "open" || job.status === "closed";
+  const chip = jobChip(job);
+  const cancellable = job.status === "open" || job.status === "closed";
   const inWindow = canCancelShift(job.date);
+  const { weekday, day, month } = shiftDateParts(job.date);
+  const hasPin = job.latitude != null && job.longitude != null;
 
-  const handleConfirmCancel = async (reason: string) => {
+  const openMaps = () => {
+    const url = Platform.select({
+      ios: `maps:0,0?q=${job.latitude},${job.longitude}(${job.locationAddress})`,
+      android: `geo:0,0?q=${job.latitude},${job.longitude}(${job.locationAddress})`,
+    });
+    if (url) Linking.openURL(url);
+  };
+
+  const share = () => Share.share({ message: `${job.companyName} on ShiftLoom: ${formatLongDate(job.date)}, ${formatTimeRange(job.startTime, job.endTime)}.` }).catch(() => {});
+
+  const handleCancel = async (reason: string) => {
     try {
       await cancelAdminJob(job.id, reason);
-      setIsCancelModalVisible(false);
-      Alert.alert("Job Cancelled", "The job has been cancelled.");
+      setCancelOpen(false);
+      setSnack({ text: "Job cancelled.", tone: "success" });
     } catch (e: any) {
-      Alert.alert("Error", e?.message || "Failed to cancel job.");
+      setCancelOpen(false);
+      setSnack({ text: e?.message || "Couldn't cancel the job. Try again.", tone: "error" });
     }
   };
 
-  return (
-    <View className="flex-1 bg-background">
-    <ScrollView className="flex-1" contentContainerClassName="p-6 gap-6">
-      <View className="bg-surface border border-outline rounded-3xl p-6 gap-2">
-        <View className="flex-row items-center justify-between">
-          <Text className="text-title-large font-bold text-on-surface flex-1" numberOfLines={2}>{job.companyName}</Text>
-          {job.status && (
-            <View className="px-3 py-1 rounded-full border border-outline">
-              <Text className="text-label-medium text-on-surface-variant capitalize">{job.status}</Text>
-            </View>
-          )}
+  const roster = (role: JobRole) => {
+    const filled = assignments.filter((a) => a.role === role.role);
+    const open = Math.max(role.totalSlots - filled.length, 0);
+    return (
+      <View key={role.id} className="overflow-hidden rounded-xl bg-surface">
+        <View className="flex-row items-center gap-2 px-4 pb-2 pt-4">
+          <Text variant="title-medium" className="flex-1">{capitalize(role.role)}</Text>
+          <Text variant="body-small" color="on-surface-variant">{`${filled.length} of ${role.totalSlots} filled, ${formatInr(role.wageInr)} per shift`}</Text>
         </View>
-        <Text className="text-body-medium text-on-surface-variant">
-          {formatDate(job.date)} · {formatTimeTo12Hour(job.startTime)} – {formatTimeTo12Hour(job.endTime)}
-        </Text>
-        <View className="flex-row items-center gap-1">
-          <MaterialCommunityIcons name="map-marker-outline" size={16} color="#747775" />
-          <Text className="text-body-medium text-on-surface-variant flex-1">{job.locationAddress}</Text>
-        </View>
-        {job.cancelReason && (
-          <Text className="text-body-small text-error">Cancelled: {job.cancelReason}</Text>
-        )}
+        <Panel>
+          {[
+            ...filled.map((a) => (
+              <ListItem
+                key={a.applicationId}
+                leadingIcon="person"
+                headline={a.name}
+                supportingText={a.email}
+                trailingIcon={a.email ? "mail" : undefined}
+                onPress={a.email ? () => Linking.openURL(`mailto:${a.email}`) : undefined}
+                accessibilityLabel={`Email ${a.name}`}
+              />
+            )),
+            ...Array.from({ length: open }, (_, i) => (
+              <ListItem key={`open-${i}`} leadingIcon="person_add" headline="Open slot" supportingText={`Waiting for a ${role.role} to accept`} />
+            )),
+          ]}
+        </Panel>
       </View>
+    );
+  };
 
-      {isLoading ? (
-        <ActivityIndicator size="large" />
-      ) : error ? (
-        <View className="items-center gap-2">
-          <Text className="text-body-medium text-error text-center">{error}</Text>
-          <Pressable onPress={load}>
-            <Text className="text-label-large text-primary font-bold">Retry</Text>
-          </Pressable>
-        </View>
-      ) : (
-        job.jobRoles.map((jobRole) => {
-          const filled = assignments.filter((a) => a.role === jobRole.role);
-          const open = Math.max(jobRole.totalSlots - filled.length, 0);
-          return (
-            <View key={jobRole.id} className="bg-surface border border-outline rounded-3xl p-6 gap-3">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-title-medium font-bold text-on-surface">
-                  {ROLE_LABELS[jobRole.role] ?? jobRole.role}: {filled.length}/{jobRole.totalSlots}
-                  {open === 0 ? " ✅" : ""}
-                </Text>
-                <Text className="text-body-medium text-on-surface-variant">₹ {jobRole.wageInr}/shift</Text>
-              </View>
-              {filled.map((a) => (
-                <View key={a.applicationId} className="flex-row items-center gap-3">
-                  <MaterialCommunityIcons name="account-circle" size={32} color="#747775" />
-                  <View className="flex-1">
-                    <Text className="text-body-large text-on-surface">{a.name}</Text>
-                    {!!a.email && (
-                      <Text className="text-body-small text-primary" onPress={() => Linking.openURL(`mailto:${a.email}`)}>
-                        {a.email}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              ))}
-              {Array.from({ length: open }, (_, i) => (
-                <View key={i} className="flex-row items-center gap-3 opacity-60">
-                  <MaterialCommunityIcons name="account-outline" size={32} color="#747775" />
-                  <Text className="text-body-medium text-on-surface-variant">Open slot</Text>
-                </View>
-              ))}
-            </View>
-          );
-        })
-      )}
-    </ScrollView>
-
-      {isCancellable && (
-        <View className="p-6 pb-10 border-t border-outline bg-surface">
-          <Pressable
-            className={`w-full py-4 rounded-full items-center justify-center flex-row ${
-              !inWindow || isCancelling ? "bg-surface-variant" : "bg-red-600 active:opacity-90"
-            }`}
-            disabled={!inWindow || isCancelling}
-            onPress={() => setIsCancelModalVisible(true)}
-          >
-            <MaterialCommunityIcons
-              name={inWindow ? "close-circle-outline" : "clock-alert-outline"}
-              size={20}
-              color={!inWindow || isCancelling ? "#747775" : "#FFFFFF"}
-            />
-            <Text className={`font-bold text-title-medium ml-2 ${!inWindow || isCancelling ? "text-on-surface-variant" : "text-white"}`}>
-              {isCancelling ? "Cancelling Job..." : inWindow ? "Cancel Job" : "Cannot Cancel (Within 2 days)"}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      <CancelReasonModal
-        visible={isCancelModalVisible}
-        title="Cancel Job"
-        description="Choose a reason. Workers who accepted this job will see it."
-        reasons={CANCEL_REASONS}
-        keepLabel="Keep Job"
-        isSubmitting={isCancelling}
-        onClose={() => setIsCancelModalVisible(false)}
-        onConfirm={handleConfirmCancel}
+  return (
+    <Screen>
+      <TopAppBarSmall
+        trailing={
+          <>
+            <IconButton icon="share" accessibilityLabel="Share shift" onPress={share} />
+            <BookmarkButton saved={savedJobIds.includes(job.id)} onToggle={() => user?.id && toggleSaveJob(job, user.id)} />
+          </>
+        }
       />
-    </View>
+      <ScrollView contentContainerClassName={`gap-4 px-4 pt-2 ${cancellable ? "pb-32" : "pb-8"}`}>
+        <View className="gap-2">
+          <Text variant="headline-medium" accessibilityRole="header">{job.companyName}</Text>
+          <Text variant="body-large" color="on-surface-variant">{`${weekday}, ${day} ${month}, ${formatTimeRange(job.startTime, job.endTime)}`}</Text>
+          <View className="flex-row gap-2 pt-1">
+            <StatusChip label={chip.label} tone={chip.tone} showIcon={false} />
+          </View>
+          {!!job.cancelReason && <Text variant="body-medium" color="error">{`Cancelled: ${job.cancelReason}`}</Text>}
+        </View>
+
+        <Panel>
+          <ListItem
+            leadingIcon="location_on"
+            headline={job.locationAddress}
+            trailingIcon={hasPin ? "open_in_new" : undefined}
+            onPress={hasPin ? openMaps : undefined}
+            accessibilityLabel={`Open ${job.locationAddress} in maps`}
+          />
+        </Panel>
+
+        <Subheader label="Roster" />
+        {isLoading ? (
+          <ActivityIndicator className="py-8" color={colors.primary} />
+        ) : error ? (
+          <EmptyState icon="cloud_off" title="Couldn't load the roster" body={error} actionLabel="Try again" onAction={load} />
+        ) : (
+          job.jobRoles.map(roster)
+        )}
+      </ScrollView>
+
+      {cancellable && (
+        <BottomActionBar>
+          <View className="flex-1 gap-2">
+            <Button
+              variant="outlined"
+              tone="error"
+              label="Cancel job"
+              onPress={() => setCancelOpen(true)}
+              disabled={!inWindow}
+              className="w-full"
+            />
+            {!inWindow && (
+              <View className="flex-row items-center justify-center gap-1">
+                <Icon name="info" size={16} />
+                <Text variant="body-small" color="on-surface-variant">Cancelling closes 2 days before the shift</Text>
+              </View>
+            )}
+          </View>
+        </BottomActionBar>
+      )}
+
+      <Snackbar message={snack} onHide={hideSnack} bottomOffset={cancellable ? 88 : 0} />
+
+      <ReasonSheet
+        visible={cancelOpen}
+        onDismiss={() => setCancelOpen(false)}
+        title="Cancel this job?"
+        supportingText={`${job.companyName}, ${formatLongDate(job.date)}. Pick a reason. Workers who accepted will see it.`}
+        reasons={CANCEL_REASONS}
+        dismissLabel="Keep job"
+        confirmLabel="Cancel job"
+        onConfirm={handleCancel}
+        loading={isCancelling}
+      />
+    </Screen>
   );
 }

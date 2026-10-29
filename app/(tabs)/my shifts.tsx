@@ -1,188 +1,108 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, StyleSheet } from "react-native";
-import { useAuthStore } from "@/src/store/useAuthStore";
-import { useJobStore } from "@/src/store/useJobStore";
-import { JobCard } from "@/components/JobCard";
+import { ActivityIndicator, FlatList, View } from "react-native";
 import { useRouter } from "expo-router";
-import { getFormattedDate } from "@/src/lib/utils";
-import { UserJob } from "@/src/services/jobService";
+import { useJobStore } from "@/src/store/useJobStore";
+import { useAuthStore } from "@/src/store/useAuthStore";
+import type { UserJob } from "@/src/services/jobService";
+import { colors } from "@/src/theme/tokens";
+import { Screen } from "@/components/ui/Screen";
+import { TopAppBarLarge } from "@/components/ui/TopAppBar";
+import { Tabs } from "@/components/ui/Tabs";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { FloatingToolbar } from "@/components/ui/FloatingToolbar";
+import { Menu } from "@/components/ui/Menu";
+import { ShiftListItem } from "@/components/ShiftListItem";
+import { FilterSheet } from "@/components/FilterSheet";
+import { useListControls } from "@/hooks/useListControls";
+import { SORT_OPTIONS, ShiftFilters, filterCount, matchesFilters, roleWage, sortJobs, sortLabel } from "@/src/lib/shiftFilters";
 
-type ShiftFilterStatus = 'accepted' | 'completed' | 'cancelled_by_user';
+type ShiftFilterStatus = "accepted" | "completed" | "cancelled";
 
-const FILTER_TABS: { label: string; status: ShiftFilterStatus }[] = [
-  { label: 'Accepted', status: 'accepted' },
-  { label: 'Completed', status: 'completed' },
-  { label: 'Cancelled', status: 'cancelled_by_user' },
+const FILTER_TABS: { label: string; value: ShiftFilterStatus }[] = [
+  { label: "Accepted", value: "accepted" },
+  { label: "Completed", value: "completed" },
+  { label: "Cancelled", value: "cancelled" },
 ];
+
+const EMPTY: Record<ShiftFilterStatus, { title: string; body: string }> = {
+  accepted: { title: "No upcoming shifts", body: "Shifts you accept from Home show up here." },
+  completed: { title: "No completed shifts yet", body: "Shifts you finish show up here." },
+  cancelled: { title: "No cancelled shifts", body: "Shifts you cancel show up here." },
+};
 
 function matchesStatus(item: UserJob, filter: ShiftFilterStatus): boolean {
   if (!item) return false;
-  if (filter === 'completed') {
-    return item.status === 'completed' || item.job?.status === 'completed';
-  }
-  if (filter === 'cancelled_by_user') {
-    return (
-      item.status === 'cancelled_by_user' ||
-      item.status === 'cancelled' ||
-      item.job?.status === 'cancelled'
-    );
-  }
-  if (filter === 'accepted') {
-    return (
-      (item.status === 'accepted' || !item.status) &&
-      item.status !== 'cancelled_by_user' &&
-      item.status !== 'cancelled' &&
-      item.job?.status !== 'completed' &&
-      item.job?.status !== 'cancelled'
-    );
-  }
-  return false;
+  if (filter === "completed") return item.status === "completed" || item.job?.status === "completed";
+  if (filter === "cancelled") return item.status === "cancelled_by_user" || item.status === "cancelled" || item.job?.status === "cancelled";
+  return (
+    (item.status === "accepted" || !item.status) &&
+    item.job?.status !== "completed" &&
+    item.job?.status !== "cancelled"
+  );
 }
 
 export default function MyShiftsScreen() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const { userJobList, getUserJobs, isLoading } = useJobStore();
-  const [selectedStatus, setSelectedStatus] = useState<ShiftFilterStatus>('accepted');
-  const router = useRouter();
+  const [status, setStatus] = useState<ShiftFilterStatus>("accepted");
+  const c = useListControls("date-asc");
 
   useEffect(() => {
-    if (user?.id) {
-      getUserJobs(user.id);
-    }
-  }, [user?.id]);
+    if (user?.id) getUserJobs(user.id);
+  }, [user?.id, getUserJobs]);
 
-  const filteredShifts = userJobList.filter(
-    (item) => item && matchesStatus(item, selectedStatus)
-  );
-
-  if (isLoading && userJobList.length === 0) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  const wageOf = (i: UserJob) => roleWage(i.job, i.role);
+  const matching = (f: ShiftFilters) => userJobList.filter((i) => i?.job && matchesStatus(i, status) && matchesFilters(i.job, f, wageOf(i)));
+  const visible = sortJobs(matching(c.filters), c.sort, (i) => ({ date: i.job.date, startTime: i.job.startTime, wage: wageOf(i) }));
 
   return (
-    <View className="flex-1 bg-background pt-6 px-6">
-      <View style={tabStyles.container}>
-        {FILTER_TABS.map((tab) => {
-          const isActive = selectedStatus === tab.status;
-          const count = userJobList.filter((j) => j && matchesStatus(j, tab.status)).length;
-
-          return (
-            <TouchableOpacity
-              key={tab.status}
-              activeOpacity={0.7}
-              onPress={() => setSelectedStatus(tab.status)}
-              style={[tabStyles.tabButton, isActive && tabStyles.tabButtonActive]}
-            >
-              <Text style={[tabStyles.tabLabel, isActive && tabStyles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+    <Screen>
+      <TopAppBarLarge title="My shifts" />
+      <View className="px-4 pb-2">
+        <Tabs tabs={FILTER_TABS} value={status} onChange={setStatus} />
       </View>
-
       <FlatList
-        data={filteredShifts}
-        keyExtractor={(item) => item.applicationId}
-        showsVerticalScrollIndicator={false}
+        data={visible}
+        keyExtractor={(i) => i.applicationId}
+        contentContainerClassName="px-4 pt-2 pb-24"
+        ItemSeparatorComponent={() => <View className="h-3" />}
         ListEmptyComponent={
-          <View className="items-center justify-center mt-12 px-4">
-            <Text className="text-title-medium font-semibold text-on-surface text-center mb-1">
-              {selectedStatus === 'accepted'
-                ? 'No active shifts'
-                : selectedStatus === 'completed'
-                ? 'No completed shifts yet'
-                : 'No cancelled shifts'}
-            </Text>
-            <Text className="text-body-medium text-on-surface-variant text-center">
-              {selectedStatus === 'accepted'
-                ? 'Apply to shifts from the home feed to see them here.'
-                : selectedStatus === 'completed'
-                ? 'Shifts you finish will show up here.'
-                : 'Shifts you have cancelled will be listed here.'}
-            </Text>
-          </View>
+          isLoading && userJobList.length === 0 ? (
+            <ActivityIndicator className="py-12" color={colors.primary} />
+          ) : (
+            <EmptyState icon="work" {...EMPTY[status]} />
+          )
         }
         renderItem={({ item }) => (
-          <JobCard
-            companyName={item.job?.companyName ?? "Unknown Company"}
-            location={item.job?.locationAddress ?? "Location unavailable"}
-            createdAt={getFormattedDate(item.job?.createdAt ?? "")}
-            wage={
-              item.job?.jobRoles?.find((r) => r.role === item.role)?.wageInr ??
-              item.job?.jobRoles?.[0]?.wageInr ??
-              0
-            }
-            onPress={() =>
-              item.job?.id &&
-              router.push({ pathname: '/job/[id]', params: { id: item.job.id } })
-            }
-            className="mb-4"
+          <ShiftListItem
+            job={item.job}
+            wage={wageOf(item)}
+            status={status}
+            onPress={() => router.push({ pathname: "/job/[id]", params: { id: item.job.id } })}
           />
         )}
       />
-    </View>
+      <View className="absolute bottom-4 left-0 right-0">
+        <FloatingToolbar
+          sortRef={c.sortRef}
+          sortLabel={sortLabel(c.sort)}
+          onSortPress={c.openSort}
+          onFilterPress={() => c.setFilterOpen(true)}
+          filterCount={filterCount(c.filters)}
+        />
+      </View>
+      <FilterSheet
+        visible={c.filterOpen}
+        value={c.filters}
+        countFor={(f) => matching(f).length}
+        onApply={(f) => {
+          c.setFilters(f);
+          c.setFilterOpen(false);
+        }}
+        onDismiss={() => c.setFilterOpen(false)}
+      />
+      <Menu anchor={c.sortAnchor} placement="above" options={SORT_OPTIONS} value={c.sort} onSelect={c.setSort} onDismiss={c.closeSort} />
+    </Screen>
   );
 }
-
-const tabStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    padding: 4,
-    backgroundColor: '#F0F4F9',
-    borderColor: '#E3E3E3',
-    borderWidth: 1,
-    borderRadius: 16,
-    marginBottom: 20,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    columnGap: 6,
-  },
-  tabButtonActive: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E3E3E3',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  tabLabel: {
-    fontWeight: '600',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#444746',
-  },
-  tabLabelActive: {
-    color: '#0B57D0',
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 9999,
-    backgroundColor: '#E8EDF2',
-  },
-  badgeActive: {
-    backgroundColor: '#E6F4FE',
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#444746',
-  },
-  badgeTextActive: {
-    color: '#0B57D0',
-  },
-});
-

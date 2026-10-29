@@ -16,6 +16,8 @@ export interface ListItemProps {
   trailing?: React.ReactNode;
   onPress?: () => void;
   accessibilityLabel?: string;
+  /** 10px vertical padding instead of 16, for review summaries. */
+  dense?: boolean;
 }
 
 const LEADING: Record<"neutral" | "warning", { bg: string; fg: ColorToken }> = {
@@ -24,7 +26,7 @@ const LEADING: Record<"neutral" | "warning", { bg: string; fg: ColorToken }> = {
 };
 
 // List item/Icon and List item/Status (Figma 221:2450, 230:2570). Rows inside a Panel.
-export function ListItem({ headline, supportingText, leadingIcon, leading, leadingTone = "neutral", trailingIcon, trailing, onPress, accessibilityLabel }: ListItemProps) {
+export function ListItem({ headline, supportingText, leadingIcon, leading, leadingTone = "neutral", trailingIcon, trailing, onPress, accessibilityLabel, dense }: ListItemProps) {
   const tone = LEADING[leadingTone];
   return (
     <Pressable
@@ -32,7 +34,7 @@ export function ListItem({ headline, supportingText, leadingIcon, leading, leadi
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={accessibilityLabel}
-      className="flex-row items-center gap-4 p-4 active:bg-on-surface/5"
+      className={`flex-row items-center gap-4 px-4 active:bg-on-surface/5 ${dense ? "py-2.5" : "py-4"}`}
     >
       {leading ??
         (leadingIcon && (

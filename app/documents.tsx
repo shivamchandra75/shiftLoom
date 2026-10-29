@@ -1,12 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { PrimaryButton, SecondaryButton } from "@/components/ui/button";
 import { useAuthStore } from "@/src/store/useAuthStore";
+import { colors } from "@/src/theme/tokens";
 import {
   ALLOWED_DOC_TYPES,
   checkPickedFile,
@@ -19,19 +17,20 @@ import {
   submitDocument,
   UserDocument,
 } from "@/src/services/documentService";
-
-const STATUS_CHIP = {
-  missing: { label: "Not uploaded", icon: "file-upload-outline", tone: "text-on-surface-variant", color: "#444746" },
-  pending: { label: "In review", icon: "clock-outline", tone: "text-primary", color: "#0B57D0" },
-  verified: { label: "Verified", icon: "check-decagram", tone: "text-success", color: "#146C2E" },
-  rejected: { label: "Rejected", icon: "alert-circle-outline", tone: "text-error", color: "#B3261E" },
-} as const;
-
-const formatSize = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
+import { Screen, BottomActionBar } from "@/components/ui/Screen";
+import { TopAppBarSmall } from "@/components/ui/TopAppBar";
+import { Text } from "@/components/ui/Text";
+import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/Dialog";
+import { Result } from "@/components/ui/Result";
+import { DocumentUploadCard, formatSize, onFileChip } from "@/components/DocumentUploadCard";
+import { DocumentPreviewModal, PreviewableDocument } from "@/components/DocumentPreviewModal";
+import { StatusChip } from "@/components/ui/Chip";
+import { formatDayMonth } from "@/src/lib/utils";
 
 export default function DocumentsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const required = user?.role && user.role !== "admin" ? REQUIRED_DOCS[user.role] : [];
 
@@ -42,7 +41,9 @@ export default function DocumentsScreen() {
   const [fileErrors, setFileErrors] = useState<Partial<Record<DocType, string>>>({});
   const [uploading, setUploading] = useState<DocType | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
+  const [outcome, setOutcome] = useState<"success" | "failure" | null>(null);
+  const [removing, setRemoving] = useState<DocType | null>(null);
+  const [previewing, setPreviewing] = useState<{ type: DocType; staged: boolean } | null>(null);
 
   const load = useCallback(() => {
     if (!user?.id) return;
@@ -78,6 +79,16 @@ export default function DocumentsScreen() {
     });
   };
 
+  const removeFile = (type: DocType) => {
+    setPicked((p) => {
+      const next = { ...p };
+      delete next[type];
+      return next;
+    });
+    setFileErrors((e) => ({ ...e, [type]: undefined }));
+    setRemoving(null);
+  };
+
   // Every required document must be either picked now or already on file (and not rejected)
   const missing = required.filter((t) => !picked[t] && (!byType.has(t) || byType.get(t)!.status === "rejected"));
   const stagedTypes = required.filter((t) => picked[t]);
@@ -106,119 +117,155 @@ export default function DocumentsScreen() {
     if (Object.keys(failed).length === 0) {
       try {
         await requestVerification(user.id);
-        setDone(true);
-      } catch (e: any) {
-        setLoadError(e?.message || "Documents uploaded, but we couldn't request verification. Try again.");
+        setOutcome("success");
+      } catch {
+        setOutcome("failure");
       }
+    } else {
+      setOutcome("failure");
     }
     setIsSubmitting(false);
     load();
   };
 
-  if (done) {
+  if (outcome) {
     return (
-      <View className="flex-1 bg-background items-center justify-center px-8 gap-4" style={{ paddingBottom: insets.bottom }}>
-        <View className="w-20 h-20 rounded-full bg-success/15 items-center justify-center">
-          <MaterialCommunityIcons name="check-circle" size={48} color="#146C2E" />
-        </View>
-        <Text className="text-headline-small font-bold text-on-surface text-center">Documents sent for verification</Text>
-        <Text className="text-body-large text-on-surface-variant text-center">
-          An admin will review them soon. You can view your status on the Profile tab.
-        </Text>
-        <View className="w-full gap-3 mt-4">
-          <PrimaryButton label="View status" onPress={() => router.replace("/(tabs)/profile")} />
-          <SecondaryButton label="Done" onPress={() => router.back()} />
-        </View>
-      </View>
+      <Screen className="justify-center px-4">
+        {outcome === "success" ? (
+          <Result
+            status="success"
+            title="Documents sent for verification"
+            body="An admin will review them, usually within a day. You can follow each document on your Profile."
+            primaryLabel="View status"
+            onPrimary={() => router.replace("/(tabs)/profile")}
+            secondaryLabel="Done"
+            onSecondary={() => router.back()}
+          />
+        ) : (
+          <Result
+            status="failure"
+            title="Upload didn't go through"
+            body="Your files are still selected. Check your connection and try again."
+            primaryLabel="Try again"
+            onPrimary={() => {
+              setOutcome(null);
+              handleSubmit();
+            }}
+            secondaryLabel="Go back"
+            onSecondary={() => setOutcome(null)}
+          />
+        )}
+      </Screen>
     );
   }
 
-  if (isLoading && docs.length === 0) {
-    return (
-      <View className="flex-1 bg-background items-center justify-center">
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  const removingFile = removing ? picked[removing] : undefined;
+
+  // Before sending: the file picked on this device. After upload: the stored copy.
+  const previewStaged = previewing?.staged ? picked[previewing.type] : undefined;
+  const previewOnFile = previewing && !previewing.staged ? byType.get(previewing.type) : undefined;
+  const previewDoc: PreviewableDocument | null = previewing && previewStaged
+    ? {
+        id: `local-${previewing.type}`,
+        title: DOC_LABELS[previewing.type],
+        fileName: previewStaged.name,
+        filePath: "",
+        mimeType: previewStaged.mimeType,
+        localUri: previewStaged.uri,
+        subtitle: `${previewStaged.name}, ${formatSize(previewStaged.size)}, not sent yet`,
+      }
+    : previewing && previewOnFile
+      ? {
+          id: previewOnFile.id,
+          title: DOC_LABELS[previewing.type],
+          fileName: previewOnFile.fileName,
+          filePath: previewOnFile.filePath,
+          mimeType: previewOnFile.mimeType,
+          subtitle: `${previewOnFile.fileName}, uploaded ${formatDayMonth(previewOnFile.updatedAt)}`,
+        }
+      : null;
+  const previewChip = previewOnFile ? onFileChip(previewOnFile.status) : null;
 
   return (
-    <View className="flex-1 bg-background">
-      <ScrollView contentContainerClassName="p-6 gap-4">
-        <Text className="text-body-medium text-on-surface-variant">
-          Upload these documents for your <Text className="font-bold capitalize">{user?.role}</Text> role. PDF, JPG or PNG, up to 5 MB each.
-        </Text>
-
-        {!!loadError && (
-          <View className="flex-row items-center gap-2 bg-error/10 rounded-2xl p-4">
-            <MaterialCommunityIcons name="alert-circle-outline" size={20} color="#B3261E" />
-            <Text className="flex-1 text-body-medium text-error">{loadError}</Text>
-            <Pressable onPress={load} hitSlop={8}>
-              <Text className="text-label-large font-bold text-primary">Retry</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {required.map((type) => {
-          const onFile = byType.get(type);
-          const staged = picked[type];
-          const chip = STATUS_CHIP[onFile?.status ?? "missing"];
-          const locked = onFile?.status === "verified";
-          const error = fileErrors[type];
-          return (
-            <View key={type} className={`bg-surface border rounded-2xl p-4 gap-3 ${error ? "border-error" : "border-outline"}`}>
-              <View className="flex-row items-center justify-between gap-2">
-                <Text className="flex-1 text-title-small font-bold text-on-surface">{DOC_LABELS[type]}</Text>
-                <View className="flex-row items-center gap-1">
-                  <MaterialCommunityIcons name={chip.icon} size={16} color={chip.color} />
-                  <Text className={`text-label-medium font-bold ${chip.tone}`}>{chip.label}</Text>
-                </View>
-              </View>
-
-              {onFile && !staged && (
-                <Text className="text-body-small text-on-surface-variant" numberOfLines={1}>On file: {onFile.fileName}</Text>
-              )}
-              {onFile?.status === "rejected" && !!onFile.rejectionReason && (
-                <Text className="text-body-small text-error">Reason: {onFile.rejectionReason}</Text>
-              )}
-              {staged && (
-                <View className="flex-row items-center gap-2 bg-surface-variant rounded-xl px-3 py-2">
-                  <MaterialCommunityIcons name={staged.mimeType === "application/pdf" ? "file-pdf-box" : "file-image-outline"} size={20} color="#444746" />
-                  <Text className="flex-1 text-body-small text-on-surface" numberOfLines={1}>{staged.name}</Text>
-                  <Text className="text-body-small text-on-surface-variant">{formatSize(staged.size)}</Text>
-                  {uploading === type && <ActivityIndicator size="small" />}
-                </View>
-              )}
-              {!!error && <Text className="text-body-small text-error">{error}</Text>}
-
-              {!locked && (
-                <Pressable
-                  onPress={() => pickFile(type)}
-                  disabled={isSubmitting}
-                  accessibilityRole="button"
-                  className="flex-row items-center justify-center gap-2 py-2.5 rounded-full border border-outline active:bg-surface-variant"
-                >
-                  <MaterialCommunityIcons name="paperclip" size={18} color="#0B57D0" />
-                  <Text className="text-label-large font-bold text-primary">{staged || onFile ? "Replace file" : "Choose file"}</Text>
-                </Pressable>
-              )}
-            </View>
-          );
-        })}
-      </ScrollView>
-
-      <View className="px-6 pt-3 border-t border-outline bg-background gap-2" style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-        {missing.length > 0 && (
-          <Text className="text-body-small text-on-surface-variant text-center">
-            {missing.length} more {missing.length === 1 ? "document" : "documents"} needed
+    <Screen>
+      <TopAppBarSmall title="Upload documents" />
+      {isLoading && docs.length === 0 ? (
+        <ActivityIndicator className="py-12" color={colors.primary} />
+      ) : (
+        <ScrollView contentContainerClassName="gap-3 px-4 pt-2 pb-32">
+          <Text variant="body-medium" color="on-surface-variant">
+            {`Upload these for your ${user?.role ?? ""} role. PDF, JPG or PNG, up to 5 MB each.`}
           </Text>
-        )}
-        <PrimaryButton
-          label={isSubmitting ? "Uploading…" : "Submit for verification"}
-          onPress={handleSubmit}
-          loading={isSubmitting}
-          disabled={!canSubmit}
-        />
-      </View>
-    </View>
+
+          {!!loadError && (
+            <View className="flex-row items-center gap-3 rounded-md bg-error-container py-2 pl-4 pr-2">
+              <Icon name="error" size={20} color="on-error-container" />
+              <Text variant="body-medium" color="on-error-container" className="flex-1">{loadError}</Text>
+              <Button variant="text" label="Retry" onPress={load} />
+            </View>
+          )}
+
+          {required.map((type) => (
+            <DocumentUploadCard
+              key={type}
+              label={DOC_LABELS[type]}
+              onFile={byType.get(type)}
+              staged={picked[type]}
+              error={fileErrors[type]}
+              uploading={uploading === type}
+              disabled={isSubmitting}
+              onChoose={() => pickFile(type)}
+              onRemove={() => setRemoving(type)}
+              onPreviewStaged={() => setPreviewing({ type, staged: true })}
+              onPreviewOnFile={() => setPreviewing({ type, staged: false })}
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      <BottomActionBar>
+        <View className="flex-1 gap-2">
+          {missing.length > 0 && (
+            <Text variant="body-small" color="on-surface-variant" className="text-center">
+              {`Add ${missing.length} more ${missing.length === 1 ? "document" : "documents"} to submit`}
+            </Text>
+          )}
+          <Button
+            label={isSubmitting ? "Submitting…" : "Submit for verification"}
+            onPress={handleSubmit}
+            loading={isSubmitting}
+            disabled={!canSubmit}
+            className="w-full"
+          />
+        </View>
+      </BottomActionBar>
+
+      <Dialog
+        visible={!!removing}
+        icon="delete"
+        tone="error"
+        title="Remove this file?"
+        body={`${removingFile?.name ?? "This file"} will be removed. You can choose another file after.`}
+        confirmLabel="Remove"
+        onConfirm={() => removing && removeFile(removing)}
+        onDismiss={() => setRemoving(null)}
+      />
+
+      <DocumentPreviewModal
+        doc={previewDoc}
+        onClose={() => setPreviewing(null)}
+        status={previewChip ? <StatusChip label={previewChip.label} tone={previewChip.tone} showIcon={previewChip.icon} /> : undefined}
+        onChooseAnother={
+          previewStaged
+            ? () => {
+                const type = previewing!.type;
+                setPreviewing(null);
+                pickFile(type);
+              }
+            : undefined
+        }
+        onKeep={previewStaged ? () => setPreviewing(null) : undefined}
+      />
+    </Screen>
   );
 }

@@ -71,37 +71,11 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        <Stack.Screen name="job/[id]"
-          options={{
-            headerShown: true,
-            title: "Shift Details"
-          }}
-        />
-        <Stack.Screen name="admin-job/new"
-          options={{
-            headerShown: true,
-            title: "Post a Job"
-          }}
-        />
-        <Stack.Screen name="admin-user/[id]"
-          options={{
-            headerShown: true,
-            title: "Review Worker"
-          }}
-        />
-        <Stack.Screen name="admin-job/[id]"
-          options={{
-            headerShown: true,
-            title: "Job Details"
-          }}
-        />
-        <Stack.Screen
-          name="documents"
-          options={{
-            headerShown: true,
-            title: "Verification Documents"
-          }}
-        />
+        <Stack.Screen name="job/[id]" />
+        <Stack.Screen name="admin-job/new" />
+        <Stack.Screen name="admin-user/[id]" />
+        <Stack.Screen name="admin-job/[id]" />
+        <Stack.Screen name="documents" />
         <Stack.Screen
           name="notifications"
           options={{

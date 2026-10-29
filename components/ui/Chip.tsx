@@ -31,8 +31,10 @@ export function FilterChip({ label, selected, onPress }: { label: string; select
       onPress={onPress}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
-      className={`rounded-full px-4 py-2 active:opacity-80 ${selected ? "bg-primary-container" : "border border-outline-variant"}`}
+      className={`rounded-full border px-4 py-2 active:opacity-80 ${selected ? "border-primary-container" : "border-outline-variant"}`}
     >
+      {/* See Tabs: a background added after mount loses its radius on Android, so only opacity changes */}
+      <View pointerEvents="none" className="absolute inset-0 rounded-full bg-primary-container" style={{ opacity: selected ? 1 : 0 }} />
       <Text variant="label-large" color={selected ? "on-primary-container" : "on-surface-variant"}>{label}</Text>
     </Pressable>
   );

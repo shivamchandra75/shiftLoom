@@ -1,314 +1,201 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Platform, Linking, Share, Alert } from 'react-native';
-import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useJobStore } from '@/src/store/useJobStore';
-import { useAuthStore } from '@/src/store/useAuthStore';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { OsmMap } from '@/components/OsmMap';
-import { canCancelShift, formatDate, formatTimeTo12Hour } from '@/src/lib/utils';
-import { CancelReasonModal } from '@/components/CancelReasonModal';
+import React, { useState } from "react";
+import { View, ScrollView, Platform, Linking, Share } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useJobStore } from "@/src/store/useJobStore";
+import { useAuthStore } from "@/src/store/useAuthStore";
+import { OsmMap } from "@/components/OsmMap";
+import { canCancelShift, formatInr, formatLongDate, formatTimeRange, shiftHours } from "@/src/lib/utils";
+import { roleWage } from "@/src/lib/shiftFilters";
+import { Screen, BottomActionBar } from "@/components/ui/Screen";
+import { TopAppBarSmall } from "@/components/ui/TopAppBar";
+import { IconButton, BookmarkButton } from "@/components/ui/IconButton";
+import { Text, ColorToken } from "@/components/ui/Text";
+import { Button } from "@/components/ui/button";
+import { StatusChip } from "@/components/ui/Chip";
+import { ListItem, Panel, Subheader } from "@/components/ui/ListItem";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Snackbar, SnackbarMessage } from "@/components/ui/snackbar";
+import { ReasonSheet } from "@/components/ReasonSheet";
 
-const SUPPORT_BG_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" fill="none"><circle cx="360" cy="20" r="80" fill="%23006A60" fill-opacity="0.07"/><circle cx="30" cy="110" r="50" fill="%23006A60" fill-opacity="0.05"/><path d="M-20 60 C 100 10, 180 110, 280 50 C 340 10, 390 80, 420 40" stroke="%23006A60" stroke-width="32" stroke-opacity="0.06"/></svg>`;
+const CANCELLATION_REASONS = ["Medical or personal emergency", "Transport issue", "Schedule conflict", "Other"];
+const SUPPORT_PHONE = "tel:+919876543210";
 
-const CANCELLATION_REASONS = [
-  "Medical / Personal Emergency",
-  "Transportation Issue",
-  "Schedule Conflict",
-  "Other",
-];
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function JobDetailScreen() {
-
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  
-  const {
-    jobList,
-    userJobList,
-    applyJob,
-    isApplying,
-    cancelJob,
-    isCancelling,
-    savedJobIds,
-    toggleSaveJob
-  } = useJobStore();
+  const { jobList, savedJobList, userJobList, applyJob, isApplying, cancelJob, isCancelling, savedJobIds, toggleSaveJob } = useJobStore();
   const { user } = useAuthStore();
-  
-  const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [snack, setSnack] = useState<SnackbarMessage | null>(null);
 
-  const job = jobList.find(j => j.id === id);
-  const userApplication = userJobList.find(uj => uj?.job?.id === id);
-  const isAccepted = userApplication?.status === 'accepted';
-  const isCancelled = userApplication?.status === 'cancelled_by_user';
-  const isSaved = job ? savedJobIds.includes(job.id) : false;
-  const canCancel = job ? canCancelShift(job.date) : false;
+  const application = userJobList.find((uj) => uj?.job?.id === id);
+  const job = jobList.find((j) => j.id === id) ?? savedJobList.find((j) => j.id === id) ?? application?.job;
 
   if (!job) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <Text className="text-on-surface">Job not found.</Text>
-        <Pressable onPress={() => router.back()} className="mt-4 p-2 bg-primary rounded">
-          <Text className="text-on-primary font-bold">Go Back</Text>
-        </Pressable>
-      </View>
+      <Screen>
+        <TopAppBarSmall />
+        <EmptyState icon="event_busy" title="Shift not found" body="It may have been removed or cancelled." actionLabel="Go back" onAction={() => router.back()} />
+      </Screen>
     );
   }
 
-
-  const roleDetail = user?.role
-    ? job.jobRoles.find(r => r.role === user.role)
-    : job.jobRoles[0];
-
-  const wage = roleDetail?.wageInr || 0;
+  const isAccepted = application?.status === "accepted";
+  const isCancelled = application?.status === "cancelled_by_user";
+  const isSaved = savedJobIds.includes(job.id);
+  const canCancel = canCancelShift(job.date);
+  const roleDetail = job.jobRoles.find((r) => r.role === user?.role) ?? job.jobRoles[0];
+  const wage = roleWage(job, user?.role);
+  const roleName = roleDetail?.role ?? "worker";
+  const hours = shiftHours(job.startTime, job.endTime);
 
   const handleApply = async () => {
     if (!user?.id || !roleDetail?.role) return;
     try {
       await applyJob(job.id, user.id, roleDetail.role);
-      Alert.alert('Success', 'Successfully applied for the shift!');
-      router.back();
+      setSnack({ text: "Shift accepted. It's in My shifts.", tone: "success" });
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to apply.');
+      setSnack({ text: err?.message || "Couldn't accept the shift. Try again.", tone: "error" });
     }
   };
 
-  const handleOpenCancelModal = () => {
-    if (!canCancel) {
-      Alert.alert(
-        "Cancellation Unavailable",
-        "Shifts cannot be cancelled within 2 days of their start date."
-      );
-      return;
-    }
-    setIsCancelModalVisible(true);
-  };
-
-  const handleConfirmCancellation = async (reason: string) => {
-    if (!user?.id || !job) return;
+  const handleCancel = async (reason: string) => {
+    if (!user?.id) return;
     try {
       await cancelJob(job.id, user.id, reason);
-      setIsCancelModalVisible(false);
-      Alert.alert("Shift Cancelled", "Your shift has been cancelled.");
-      router.back();
+      setCancelOpen(false);
+      setSnack({ text: `Shift cancelled. We've told ${job.companyName}.`, tone: "success" });
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to cancel shift.");
+      setCancelOpen(false);
+      setSnack({ text: err?.message || "Couldn't cancel the shift. Try again.", tone: "error" });
     }
   };
 
-  const handleOpenMaps = () => {
+  const openMaps = () => {
     if (!job.latitude || !job.longitude) return;
     const url = Platform.select({
       ios: `maps:0,0?q=${job.latitude},${job.longitude}(${job.locationAddress})`,
-      android: `geo:0,0?q=${job.latitude},${job.longitude}(${job.locationAddress})`
+      android: `geo:0,0?q=${job.latitude},${job.longitude}(${job.locationAddress})`,
     });
     if (url) Linking.openURL(url);
   };
 
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        message: `Check out this shift at ${job.companyName} on ShiftLoom! Wage: ₹${wage} per shift.`,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  const share = () => Share.share({ message: `Shift at ${job.companyName} on ShiftLoom: ${formatInr(wage)} per shift.` }).catch(() => {});
+
+  // Bottom action bar state (Figma 230:2667)
+  let hint = "per shift";
+  let hintColor: ColorToken = "on-surface-variant";
+  let action: React.ReactNode;
+  if (isCancelled) {
+    hint = "You cancelled this shift";
+    hintColor = "error";
+    action = <Button label="Shift cancelled" disabled />;
+  } else if (isAccepted && canCancel) {
+    hint = "You're booked for this shift";
+    hintColor = "success";
+    action = <Button variant="outlined" tone="error" label="Cancel shift" onPress={() => setCancelOpen(true)} />;
+  } else if (isAccepted) {
+    hint = "Cancelling closes 2 days before the shift";
+    action = <Button variant="outlined" label="Cancel shift" disabled />;
+  } else if (!user?.isVerified) {
+    hint = "Verify your account first";
+    hintColor = "warning";
+    action = <Button variant="tonal" label="Verify account" onPress={() => router.navigate("/(tabs)/profile")} />;
+  } else {
+    action = <Button label={isApplying ? "Accepting…" : "Accept offer"} onPress={handleApply} loading={isApplying} />;
+  }
 
   return (
-    <View className="flex-1 bg-background">
-
-      <ScrollView className="flex-1" contentContainerClassName="p-5 pb-24">
-        <Text className="text-headline-medium font-bold text-on-surface mb-6">
-          {job.companyName}
-        </Text>
-
-        <View className="flex-row items-center mb-4">
-          <MaterialCommunityIcons name="calendar-clock" size={24} color="#747775" />
-          <Text className="ml-3 text-body-large text-on-surface">
-            {formatDate(job.date)} • {formatTimeTo12Hour(job.startTime)} - {formatTimeTo12Hour(job.endTime)}
-          </Text>
-        </View>
-
-        <View className="flex-row items-center mb-4">
-          <MaterialCommunityIcons name="cash" size={24} color="#747775" />
-          <Text className="ml-3 text-body-large text-on-surface">
-            ₹{wage} per shift
-          </Text>
-        </View>
-
-        <View className="flex-row items-center mb-4 gap-3">
-          <MaterialCommunityIcons name="account" size={24} color="#747775" />
-          <Text className=" text-body-large text-on-surface">
-            {roleDetail?.totalSlots} slots
-          </Text>
-        </View>
-
-        <View className="mb-6">
-          <View className="flex-row items-center mb-2">
-            <MaterialCommunityIcons name="map-marker" size={24} color="#747775" />
-            <Text className="ml-3 text-body-large text-on-surface flex-1">
-              {job.locationAddress}
-            </Text>
+    <Screen>
+      <TopAppBarSmall
+        trailing={
+          <>
+            <IconButton icon="share" accessibilityLabel="Share shift" onPress={share} />
+            <BookmarkButton saved={isSaved} onToggle={() => user?.id && toggleSaveJob(job, user.id)} />
+          </>
+        }
+      />
+      <ScrollView contentContainerClassName="gap-4 px-4 pt-2 pb-32">
+        <View className="gap-2">
+          <Text variant="headline-medium" accessibilityRole="header">{job.companyName}</Text>
+          <Text variant="body-large" color="on-surface-variant">{job.locationAddress}</Text>
+          <View className="flex-row gap-2 pt-1">
+            <StatusChip label={capitalize(roleName)} tone="neutral" showIcon={false} />
+            {isAccepted && <StatusChip label="Accepted" tone="success" />}
+            {isCancelled && <StatusChip label="Cancelled" tone="error" />}
           </View>
+        </View>
 
+        <Panel>
+          <ListItem
+            leadingIcon="event"
+            headline={formatLongDate(job.date)}
+            supportingText={`${formatTimeRange(job.startTime, job.endTime, false)}, ${hours} ${hours === 1 ? "hour" : "hours"}`}
+          />
+          {roleDetail && (
+            <ListItem
+              leadingIcon="groups"
+              headline={`${roleDetail.totalSlots} ${roleDetail.totalSlots === 1 ? "slot" : "slots"}`}
+              supportingText={`${capitalize(roleName)}s needed for this shift`}
+            />
+          )}
+        </Panel>
 
-          {job.latitude && job.longitude && (
-            <View className="rounded-2xl overflow-hidden mt-3 border border-outline">
+        <Subheader label="Location" />
+        <Panel>
+          {job.latitude && job.longitude ? (
+            <View pointerEvents="none">
               <OsmMap
-                height={160}
+                height={140}
                 interactive={false}
                 initial={{ latitude: job.latitude, longitude: job.longitude, zoom: 15 }}
                 pin={{ latitude: job.latitude, longitude: job.longitude }}
               />
-              <Pressable 
-                onPress={handleOpenMaps}
-                className="bg-surface/90 absolute bottom-2 right-2 flex-row items-center px-3 py-1.5 rounded-full"
-              >
-                <Text className="text-primary font-bold text-label-medium mr-1">Open in Maps</Text>
-                <MaterialCommunityIcons name="open-in-new" size={14} color="#006A60" />
-              </Pressable>
             </View>
-          )}
-        </View>
-
-        <View className="flex-row gap-3 mb-6">
-          <Pressable
-            onPress={() => {
-              if (job && user?.id) {
-                toggleSaveJob(job, user.id);
-              }
-            }}
-            className={`flex-1 flex-row items-center justify-center py-3 rounded-full border border-outline ${
-              isSaved ? 'bg-black border-black' : 'bg-surface'
-            } active:opacity-80`}
-          >
-            <MaterialCommunityIcons 
-              name="bookmark" 
-              size={20} 
-              color={isSaved ? '#FFFFFF' : '#1F1F1F'} 
-            />
-            <Text className={`font-semibold ml-2 ${isSaved ? 'text-white' : 'text-on-surface'}`}>
-              {isSaved ? 'Saved' : 'Save'}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleShare}
-            className="flex-1 flex-row items-center justify-center py-3 rounded-full border border-outline bg-surface active:opacity-80"
-          >
-            <MaterialCommunityIcons 
-              name="share-variant" 
-              size={18}
-              color="#1F1F1F" 
-            />
-            <Text className="font-semibold text-on-surface ml-2">Share</Text>
-          </Pressable>
-        </View>
-
-        {/* Subtle Contact Support Banner */}
-        <Pressable
-          onPress={() => Linking.openURL('tel:+919876543210')}
-          className="w-full relative overflow-hidden rounded-2xl border border-outline/50 bg-surface-variant/20 p-4 mb-6 active:opacity-80"
-        >
-          {/* SVG Background Layer */}
-          <Image
-            source={{ uri: SUPPORT_BG_SVG }}
-            className="absolute inset-0 w-full h-full"
-            contentFit="cover"
-            pointerEvents="none"
+          ) : null}
+          <ListItem
+            leadingIcon="location_on"
+            headline={job.locationAddress}
+            trailingIcon={job.latitude && job.longitude ? "open_in_new" : undefined}
+            onPress={job.latitude && job.longitude ? openMaps : undefined}
+            accessibilityLabel={`Open ${job.locationAddress} in maps`}
           />
+        </Panel>
 
-          {/* Foreground Content */}
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-3 flex-1 mr-2">
-              <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
-                <MaterialCommunityIcons name="headphones" size={20} color="#006A60" />
-              </View>
-
-              <View className="flex-1">
-                <Text className="text-title-small font-semibold text-on-surface">
-                  Have questions about this shift?
-                </Text>
-                <Text className="text-body-small text-on-surface-variant">
-                  Contact our support team for quick assistance
-                </Text>
-              </View>
-            </View>
-
-            <MaterialCommunityIcons name="chevron-right" size={20} color="#747775" />
-          </View>
-        </Pressable>
-
+        <Panel>
+          <ListItem
+            leadingIcon="support_agent"
+            headline="Questions about this shift?"
+            supportingText="Call ShiftLoom support"
+            trailingIcon="chevron_right"
+            onPress={() => Linking.openURL(SUPPORT_PHONE)}
+          />
+        </Panel>
       </ScrollView>
 
-      <View className="absolute bottom-0 w-full p-4 bg-surface pb-8">
-        {isCancelled ? (
-          <Pressable
-            className="w-full py-4 rounded-full items-center justify-center flex-row bg-surface-variant opacity-75"
-            disabled={true}
-          >
-            <MaterialCommunityIcons name="cancel" size={20} color="#747775" />
-            <Text className="font-bold text-title-medium ml-2 text-on-surface-variant">
-              Shift Cancelled
-            </Text>
-          </Pressable>
-        ) : isAccepted ? (
-          <Pressable
-            className={`w-full py-4 rounded-full items-center justify-center flex-row ${
-              !canCancel || isCancelling
-                ? 'bg-surface-variant'
-                : 'bg-red-600 active:opacity-90'
-            }`}
-            disabled={!canCancel || isCancelling}
-            onPress={handleOpenCancelModal}
-          >
-            <MaterialCommunityIcons
-              name={canCancel ? "close-circle-outline" : "clock-alert-outline"}
-              size={20}
-              color={!canCancel || isCancelling ? "#747775" : "#FFFFFF"}
-            />
-            <Text
-              className={`font-bold text-title-medium ml-2 ${
-                !canCancel || isCancelling ? 'text-on-surface-variant' : 'text-white'
-              }`}
-            >
-              {isCancelling
-                ? 'Cancelling Shift...'
-                : canCancel
-                  ? 'Cancel Shift'
-                  : 'Cannot Cancel (Within 2 days)'}
-            </Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            className={`w-full py-4 rounded-full items-center justify-center flex-row ${
-              !user?.isVerified || isApplying ? 'bg-surface-variant' : 'bg-primary active:opacity-90'
-            }`}
-            disabled={!user?.isVerified || isApplying}
-            onPress={handleApply}
-          >
-            {isApplying ? (
-              <Text className="text-on-surface-variant font-bold text-title-medium ml-2">Applying...</Text>
-            ) : !user?.isVerified ? (
-              <Text className="text-on-surface-variant font-bold text-title-medium ml-2">Verify Account to Apply</Text>
-            ) : (
-              <Text className="text-on-primary font-bold text-title-medium ml-2">Accept Offer</Text>
-            )}
-          </Pressable>
-        )}
-      </View>
+      <BottomActionBar>
+        <View className="flex-1">
+          <Text variant="title-large">{formatInr(wage)}</Text>
+          <Text variant="body-small" color={hintColor}>{hint}</Text>
+        </View>
+        {action}
+      </BottomActionBar>
 
-      <CancelReasonModal
-        visible={isCancelModalVisible}
-        title="Cancel Shift"
-        description="Please choose a reason for cancelling this shift. This feedback helps improve worker scheduling."
+      <Snackbar message={snack} onHide={() => setSnack(null)} bottomOffset={88} />
+
+      <ReasonSheet
+        visible={cancelOpen}
+        onDismiss={() => setCancelOpen(false)}
+        title="Cancel this shift?"
+        supportingText={`${job.companyName}, ${formatLongDate(job.date)}, ${formatTimeRange(job.startTime, job.endTime)}. Pick a reason so we can offer the slot to someone else.`}
         reasons={CANCELLATION_REASONS}
-        keepLabel="Keep Shift"
-        isSubmitting={isCancelling}
-        onClose={() => setIsCancelModalVisible(false)}
-        onConfirm={handleConfirmCancellation}
+        dismissLabel="Keep shift"
+        confirmLabel="Cancel shift"
+        onConfirm={handleCancel}
+        loading={isCancelling}
       />
-    </View>
+    </Screen>
   );
 }
