@@ -46,3 +46,6 @@ app-example
 graphify-out/
 .graphify/
 google gemini design reference
+
+# Firebase service account key (private, uploaded to EAS only)
+*firebase-adminsdk*.json

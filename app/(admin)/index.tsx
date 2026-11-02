@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Fab } from "@/components/ui/Fab";
 import { Menu } from "@/components/ui/Menu";
 import { AdminJobListItem, jobSlots } from "@/components/AdminJobListItem";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useListControls } from "@/hooks/useListControls";
 import { matchesSearch } from "@/src/lib/shiftFilters";
 
@@ -91,6 +92,7 @@ export default function AdminHomeScreen() {
       <TopAppBarLarge
         title="My jobs"
         supportingText={needWorkers ? `${needWorkers} ${needWorkers === 1 ? "shift still needs" : "shifts still need"} workers` : undefined}
+        trailing={<NotificationBell />}
       />
       <FlatList
         data={visible}

@@ -1,6 +1,6 @@
 import React from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Camera, Map, ViewAnnotation, type CameraRef } from "@maplibre/maplibre-react-native";
+import { Camera, Map, Marker, type CameraRef } from "@maplibre/maplibre-react-native";
 
 // OpenFreeMap: free OpenStreetMap vector tiles, no API key or account
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -35,10 +35,11 @@ export function OsmMap({ initial, pin, height, interactive = true, onPress, came
       }
     >
       <Camera ref={cameraRef} initialViewState={{ center: [initial.longitude, initial.latitude], zoom: initial.zoom }} />
+      {/* Marker, not ViewAnnotation: on Android ViewAnnotation snapshots the pin to a bitmap and crashes (NPE) on a 0-size layout */}
       {pin && (
-        <ViewAnnotation lngLat={[pin.longitude, pin.latitude]} anchor="bottom">
+        <Marker lngLat={[pin.longitude, pin.latitude]} anchor="bottom">
           <MaterialCommunityIcons name="map-marker" size={36} color="#B3261E" />
-        </ViewAnnotation>
+        </Marker>
       )}
     </Map>
   );
