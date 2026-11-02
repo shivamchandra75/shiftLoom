@@ -14,6 +14,7 @@ import { MaterialSymbolsRounded_400Regular } from '@expo-google-fonts/material-s
 import { MaterialSymbolsRounded_400Regular_Filled } from '@expo-google-fonts/material-symbols-rounded/400Regular_Filled';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -28,7 +29,7 @@ function NavigationGuard() {
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[1] === 'onboarding';
     const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'job' || segments[0] === 'notifications' || segments[0] === 'documents';
-    const inAdminGroup = segments[0] === '(admin)' || segments[0] === 'admin-job' || segments[0] === 'admin-user';
+    const inAdminGroup = segments[0] === '(admin)' || segments[0] === 'admin-job' || segments[0] === 'admin-user' || segments[0] === 'notifications';
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/login');
@@ -40,6 +41,8 @@ function NavigationGuard() {
       router.replace('/(tabs)')
     }
   }, [user, segments]);
+
+  usePushNotifications(user?.id);
 
   return null;
 }
@@ -76,13 +79,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-user/[id]" />
         <Stack.Screen name="admin-job/[id]" />
         <Stack.Screen name="documents" />
-        <Stack.Screen
-          name="notifications"
-          options={{
-            headerShown: true,
-            title: "Notifications"
-          }}
-        />
+        <Stack.Screen name="notifications" />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

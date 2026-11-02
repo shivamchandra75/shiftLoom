@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { supabase } from "@/src/lib/supabase";
 import { fetchUser, UpdateProfileInput, updateUser, User } from "@/src/services/userService";
+import { unregisterPushToken } from "@/src/services/notificationService";
+import { useNotificationStore } from "@/src/store/useNotificationStore";
 
 interface AuthState {
   user: User | null;
@@ -201,8 +203,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     set({ isLoading: true });
     try {
+      // Before signOut: deleting the token row needs the session. A failure must not block logout.
+      await unregisterPushToken().catch((e) => console.error("Failed to remove push token:", e));
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      useNotificationStore.getState().reset();
       set({ user: null, session: null, error: null, isLoading: false });
     } catch (err: any) {
       console.error("Logout failed:", err);

@@ -6,13 +6,13 @@ import { useJobStore } from "@/src/store/useJobStore";
 import { colors } from "@/src/theme/tokens";
 import { Screen } from "@/components/ui/Screen";
 import { TopAppBarLarge } from "@/components/ui/TopAppBar";
-import { IconButton } from "@/components/ui/IconButton";
 import { SearchBar } from "@/components/ui/search-bar";
 import { AssistChip } from "@/components/ui/Chip";
 import { ListItem, Panel, Subheader } from "@/components/ui/ListItem";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Menu } from "@/components/ui/Menu";
 import { JobListItem } from "@/components/JobListItem";
+import { NotificationBell } from "@/components/NotificationBell";
 import { FilterSheet } from "@/components/FilterSheet";
 import { useListControls } from "@/hooks/useListControls";
 import { NO_FILTERS, SORT_OPTIONS, ShiftFilters, filterCount, matchesFilters, matchesSearch, roleWage, sortJobs, sortLabel } from "@/src/lib/shiftFilters";
@@ -56,7 +56,7 @@ export default function HomeScreen() {
       <TopAppBarLarge
         title={`Hi, ${user?.firstName || "there"}`}
         supportingText={`Shifts open for ${role} near you`}
-        trailing={<IconButton icon="notifications" accessibilityLabel="Notifications" onPress={() => router.push("/notifications")} />}
+        trailing={<NotificationBell />}
       />
       <FlatList
         data={visible}
