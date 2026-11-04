@@ -482,6 +482,11 @@ adb shell am start -a android.intent.action.VIEW -c android.intent.category.BROW
 | 18 | Regression | Worker | Push notification tap, app closed | Opens the job |
 | 19 | Regression | Worker, no link | Normal login | Goes to Home |
 
+## Test notes (2026-11-04, Android phone, driver account)
+- Passed: closed-app right-role link, closed-app wrong-role link, closed-app bad id, back goes to Home, and all three with the app already running.
+- Cold start needed an extra fix: the router opened the link, then the guard remounted and sent the user to Home. `NavigationGuard` now reads the launch URL itself and opens the job if the app isn't on it.
+- Not tested: logged-out and signup flows, admin link, share sheet, cancelled and past shifts, accepted state, push-tap regression. The database role check was read back from `pg_policies` but not exercised with an insert.
+
 ## Constraints and gotchas
 - **Never change** `app/_layout.tsx` beyond `NavigationGuard` and its imports.
 - **NativeWind:** never toggle `shadow-*` classes conditionally. It crashes (seen in `app/(admin)/verification.tsx`).
@@ -502,38 +507,38 @@ adb shell am start -a android.intent.action.VIEW -c android.intent.category.BROW
 Tick only with evidence (see Rule 1). Record anything skipped, with the reason.
 
 ### Setup
-- [ ] On branch `feat/deep-linking`, `main` untouched
+- [x] On branch `feat/deep-linking`, `main` untouched
 
 ### Part A: Hosting
-- [ ] A1 `link-site/` created (`assetlinks.json`, `index.html`, `+not-found.html`)
-- [ ] A2 EAS and debug fingerprints added to `assetlinks.json`
-- [ ] A3 Dry-run tarball contains `.well-known/assetlinks.json`
-- [ ] A3 Site deployed to production (user)
-- [ ] A3 `curl` shows 200, `application/json`, no redirect, real fingerprints
+- [x] A1 `link-site/` created (`assetlinks.json`, `index.html`, `+not-found.html`)
+- [x] A2 EAS and debug fingerprints added to `assetlinks.json`
+- [x] A3 Dry-run tarball contains `.well-known/assetlinks.json`
+- [x] A3 Site deployed to production (user)
+- [x] A3 `curl` shows 200, `application/json`, no redirect, real fingerprints
 
 ### Part B: Database
-- [ ] B1 Migration applied to live project
-- [ ] B1 Migration file saved in repo
+- [x] B1 Migration applied to live project
+- [x] B1 Migration file saved in repo
 - [ ] Database tests pass (wrong role blocked, right role allowed, cancelled blocked)
 
 ### Code
-- [ ] 1 `app.json` intent filter
-- [ ] 2 `APP_LINK_ORIGIN`, `jobShareUrl`, `isPastDate`
-- [ ] 3 `fetchJobById`, `42501` mapped in `applyForJob`
-- [ ] 4 Worker share message has link, no wage
-- [ ] 5 Job screen: fetch, booked/saved load, loading/error/not-found states
-- [ ] 5 Job screen: role gate, `jobRoles[0]` fallback removed
-- [ ] 5 Job screen: cancelled/unavailable states, safe back
-- [ ] 6 Admin screen: share link, job fallback, safe back
-- [ ] 7 Guard keeps job through login/onboarding, routes admins
-- [ ] Hand traces in step 7 done
-- [ ] Gap-finding pass complete
-- [ ] `tsc` and `lint` show no new errors
+- [x] 1 `app.json` intent filter
+- [x] 2 `APP_LINK_ORIGIN`, `jobShareUrl`, `isPastDate`
+- [x] 3 `fetchJobById`, `42501` mapped in `applyForJob`
+- [x] 4 Worker share message has link, no wage
+- [x] 5 Job screen: fetch, booked/saved load, loading/error/not-found states
+- [x] 5 Job screen: role gate, `jobRoles[0]` fallback removed
+- [x] 5 Job screen: cancelled/unavailable states, safe back
+- [x] 6 Admin screen: share link, job fallback, safe back
+- [x] 7 Guard keeps job through login/onboarding, routes admins
+- [x] Hand traces in step 7 done
+- [x] Gap-finding pass complete
+- [x] `tsc` and `lint` show no new errors
 
 ### Build and device (user confirms)
-- [ ] 8 EAS preview build installed
-- [ ] `pm get-app-links` shows `shiftloom.expo.app` as `verified`
-- [ ] Device tests 1 to 5 (app states and role check)
+- [x] 8 EAS preview build installed
+- [x] `pm get-app-links` shows `shiftloom.expo.app` as `verified`
+- [x] Device tests 1 to 5 (app states and role check)
 - [ ] Device tests 6 to 9 (login, signup, admin)
 - [ ] Device tests 10 to 15 (edge cases and back)
 - [ ] Device tests 16 and 17 (share and no app)

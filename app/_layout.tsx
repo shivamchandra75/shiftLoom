@@ -43,7 +43,6 @@ function NavigationGuard() {
     launchLinkChecked.current = true;
     Linking.getInitialURL().then((url) => {
       const id = url?.match(/^https?:\/\/[^/]+\/job\/([^/?#]+)/)?.[1];
-      console.log('[deeplink] launch url', url, 'path', pathnameRef.current);
       const u = userRef.current;
       if (!id || pathnameRef.current.endsWith(`/${id}`)) return;
       if (!u) pendingJobId.current = id;
