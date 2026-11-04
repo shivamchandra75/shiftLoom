@@ -1,10 +1,12 @@
-import React, { useState } from "react";
-import { View, ScrollView, Platform, Linking, Share } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { View, ScrollView, Platform, Linking, Share, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useJobStore } from "@/src/store/useJobStore";
 import { useAuthStore } from "@/src/store/useAuthStore";
 import { OsmMap } from "@/components/OsmMap";
-import { canCancelShift, formatInr, formatLongDate, formatTimeRange, shiftHours } from "@/src/lib/utils";
+import { canCancelShift, formatInr, formatLongDate, formatTimeRange, isPastDate, jobShareUrl, shiftHours } from "@/src/lib/utils";
+import { colors } from "@/src/theme/tokens";
+import { fetchJobById, Job } from "@/src/services/jobService";
 import { roleWage } from "@/src/lib/shiftFilters";
 import { Screen, BottomActionBar } from "@/components/ui/Screen";
 import { TopAppBarSmall } from "@/components/ui/TopAppBar";
@@ -25,19 +27,77 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export default function JobDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { jobList, savedJobList, userJobList, applyJob, isApplying, cancelJob, isCancelling, savedJobIds, toggleSaveJob } = useJobStore();
+  const { jobList, savedJobList, userJobList, applyJob, isApplying, cancelJob, isCancelling, savedJobIds, toggleSaveJob, getUserJobs, getSavedJobs } = useJobStore();
   const { user } = useAuthStore();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [snack, setSnack] = useState<SnackbarMessage | null>(null);
 
-  const application = userJobList.find((uj) => uj?.job?.id === id);
-  const job = jobList.find((j) => j.id === id) ?? savedJobList.find((j) => j.id === id) ?? application?.job;
+  const [fetchedJob, setFetchedJob] = useState<Job | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
+  const load = useCallback(() => {
+    setIsLoading(true);
+    setLoadError("");
+    fetchJobById(id)
+      .then(setFetchedJob)
+      .catch((e) => setLoadError(e?.message === "Network request failed" ? "No internet connection. Try again." : e?.message || "Couldn't load this shift."))
+      .finally(() => setIsLoading(false));
+  }, [id]);
+
+  useEffect(load, [load]);
+
+  // A cold-start link skips Home and My shifts, so booked and saved state must load here.
+  useEffect(() => {
+    if (!user?.id) return;
+    getUserJobs(user.id);
+    getSavedJobs(user.id);
+  }, [user?.id, getUserJobs, getSavedJobs]);
+
+  // The link may be the only screen, so back falls through to Home.
+  const leave = () => (router.canGoBack() ? router.back() : router.replace("/(tabs)"));
+
+  const application = userJobList.find((uj) => uj?.job?.id === id);
+  const storeJob = jobList.find((j) => j.id === id) ?? savedJobList.find((j) => j.id === id) ?? application?.job;
+  const job = (fetchedJob?.id === id ? fetchedJob : null) ?? storeJob;
+
+  if (!job && isLoading) {
+    return (
+      <Screen>
+        <TopAppBarSmall onLeadingPress={leave} />
+        <ActivityIndicator className="py-12" color={colors.primary} />
+      </Screen>
+    );
+  }
+  if (!job && loadError) {
+    return (
+      <Screen>
+        <TopAppBarSmall onLeadingPress={leave} />
+        <EmptyState icon="cloud_off" title="Couldn't load this shift" body={loadError} actionLabel="Try again" onAction={load} />
+      </Screen>
+    );
+  }
   if (!job) {
     return (
       <Screen>
-        <TopAppBarSmall />
-        <EmptyState icon="event_busy" title="Shift not found" body="It may have been removed or cancelled." actionLabel="Go back" onAction={() => router.back()} />
+        <TopAppBarSmall onLeadingPress={leave} />
+        <EmptyState icon="event_busy" title="Shift not found" body="It may have been removed or cancelled." actionLabel="Go back" onAction={leave} />
+      </Screen>
+    );
+  }
+
+  // Shared links can reach any shift. Show nothing about it unless it has this worker's role.
+  if (user?.role && !job.jobRoles.some((r) => r.role === user.role)) {
+    return (
+      <Screen>
+        <TopAppBarSmall onLeadingPress={leave} />
+        <EmptyState
+          icon="block"
+          title="This job doesn't include your role"
+          body={`This shift has no ${user.role} slots. Your Home tab shows the shifts open to you.`}
+          actionLabel="Go to Home"
+          onAction={() => router.replace("/(tabs)")}
+        />
       </Screen>
     );
   }
@@ -46,7 +106,7 @@ export default function JobDetailScreen() {
   const isCancelled = application?.status === "cancelled_by_user";
   const isSaved = savedJobIds.includes(job.id);
   const canCancel = canCancelShift(job.date);
-  const roleDetail = job.jobRoles.find((r) => r.role === user?.role) ?? job.jobRoles[0];
+  const roleDetail = job.jobRoles.find((r) => r.role === user?.role);
   const wage = roleWage(job, user?.role);
   const roleName = roleDetail?.role ?? "worker";
   const hours = shiftHours(job.startTime, job.endTime);
@@ -82,13 +142,19 @@ export default function JobDetailScreen() {
     if (url) Linking.openURL(url);
   };
 
-  const share = () => Share.share({ message: `Shift at ${job.companyName} on ShiftLoom: ${formatInr(wage)} per shift.` }).catch(() => {});
+  const share = () =>
+    Share.share({ message: `Shift at ${job.companyName} on ${formatLongDate(job.date)}. Open it in ShiftLoom:\n${jobShareUrl(job.id)}` }).catch(() => {});
 
   // Bottom action bar state (Figma 230:2667)
   let hint = "per shift";
   let hintColor: ColorToken = "on-surface-variant";
   let action: React.ReactNode;
-  if (isCancelled) {
+  const isUnavailable = job.status !== "open" || isPastDate(job.date);
+  if (job.status === "cancelled") {
+    hint = job.cancelReason ? `Cancelled: ${job.cancelReason}` : "This shift was cancelled";
+    hintColor = "error";
+    action = <Button label="Shift cancelled" disabled />;
+  } else if (isCancelled) {
     hint = "You cancelled this shift";
     hintColor = "error";
     action = <Button label="Shift cancelled" disabled />;
@@ -99,6 +165,9 @@ export default function JobDetailScreen() {
   } else if (isAccepted) {
     hint = "Cancelling closes 2 days before the shift";
     action = <Button variant="outlined" label="Cancel shift" disabled />;
+  } else if (isUnavailable) {
+    hint = "This shift is no longer available";
+    action = <Button label="Unavailable" disabled />;
   } else if (!user?.isVerified) {
     hint = "Verify your account first";
     hintColor = "warning";
@@ -110,6 +179,7 @@ export default function JobDetailScreen() {
   return (
     <Screen>
       <TopAppBarSmall
+        onLeadingPress={leave}
         trailing={
           <>
             <IconButton icon="share" accessibilityLabel="Share shift" onPress={share} />

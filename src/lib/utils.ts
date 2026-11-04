@@ -112,3 +112,15 @@ export const toHm = (d: Date) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 // "Arjun Kumar" → "AK"
 export const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+
+// Must match the host in app.json intentFilters and the deployed link-site.
+export const APP_LINK_ORIGIN = "https://shiftloom.expo.app";
+export const jobShareUrl = (jobId: string) => `${APP_LINK_ORIGIN}/job/${jobId}`;
+
+// True when the job's date is before today (device time).
+export function isPastDate(jobDateStr: string): boolean {
+  if (!jobDateStr) return false;
+  const [year, month, day] = jobDateStr.split('-').map(Number);
+  const now = new Date();
+  return new Date(year, month - 1, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}

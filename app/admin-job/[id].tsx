@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Platform, ScrollView, Share, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuthStore } from "@/src/store/useAuthStore";
 import { useJobStore } from "@/src/store/useJobStore";
 import { colors } from "@/src/theme/tokens";
-import { fetchJobAssignments, JobAssignment, JobRole } from "@/src/services/jobService";
-import { canCancelShift, formatInr, formatLongDate, formatTimeRange, shiftDateParts } from "@/src/lib/utils";
+import { fetchJobAssignments, fetchJobById, Job, JobAssignment, JobRole } from "@/src/services/jobService";
+import { canCancelShift, formatInr, formatLongDate, formatTimeRange, jobShareUrl, shiftDateParts } from "@/src/lib/utils";
 import { Screen, BottomActionBar } from "@/components/ui/Screen";
 import { TopAppBarSmall } from "@/components/ui/TopAppBar";
 import { IconButton, BookmarkButton } from "@/components/ui/IconButton";
@@ -27,7 +27,25 @@ export default function AdminJobDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
   const { adminJobList, savedJobList, savedJobIds, toggleSaveJob, cancelAdminJob, isCancelling } = useJobStore();
-  const job = adminJobList.find((j) => j.id === id) ?? savedJobList.find((j) => j.id === id);
+  const router = useRouter();
+  const [fetchedJob, setFetchedJob] = useState<Job | null>(null);
+  const [jobLoading, setJobLoading] = useState(true);
+  const [jobError, setJobError] = useState("");
+  const storeJob = adminJobList.find((j) => j.id === id) ?? savedJobList.find((j) => j.id === id);
+  const job = storeJob ?? (fetchedJob?.id === id ? fetchedJob : null);
+  const leave = () => (router.canGoBack() ? router.back() : router.replace("/(admin)"));
+
+  // Links and push taps can open a job that isn't in the store yet.
+  const loadJob = useCallback(() => {
+    setJobLoading(true);
+    setJobError("");
+    fetchJobById(id)
+      .then(setFetchedJob)
+      .catch((e) => setJobError(e?.message === "Network request failed" ? "No internet connection. Try again." : e?.message || "Couldn't load this job."))
+      .finally(() => setJobLoading(false));
+  }, [id]);
+
+  useEffect(loadJob, [loadJob]);
 
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,8 +68,14 @@ export default function AdminJobDetailScreen() {
   if (!job) {
     return (
       <Screen>
-        <TopAppBarSmall />
-        <EmptyState icon="event_busy" title="Shift not found" body="It may have been removed." />
+        <TopAppBarSmall onLeadingPress={leave} />
+        {jobLoading ? (
+          <ActivityIndicator className="py-12" color={colors.primary} />
+        ) : jobError ? (
+          <EmptyState icon="cloud_off" title="Couldn't load this job" body={jobError} actionLabel="Try again" onAction={loadJob} />
+        ) : (
+          <EmptyState icon="event_busy" title="Shift not found" body="It may have been removed." />
+        )}
       </Screen>
     );
   }
@@ -70,7 +94,7 @@ export default function AdminJobDetailScreen() {
     if (url) Linking.openURL(url);
   };
 
-  const share = () => Share.share({ message: `${job.companyName} on ShiftLoom: ${formatLongDate(job.date)}, ${formatTimeRange(job.startTime, job.endTime)}.` }).catch(() => {});
+  const share = () => Share.share({ message: `${job.companyName} on ShiftLoom: ${formatLongDate(job.date)}, ${formatTimeRange(job.startTime, job.endTime)}.\n${jobShareUrl(job.id)}` }).catch(() => {});
 
   const handleCancel = async (reason: string) => {
     try {
@@ -117,6 +141,7 @@ export default function AdminJobDetailScreen() {
   return (
     <Screen>
       <TopAppBarSmall
+        onLeadingPress={leave}
         trailing={
           <>
             <IconButton icon="share" accessibilityLabel="Share shift" onPress={share} />
