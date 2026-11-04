@@ -56,7 +56,7 @@ Don't trust the old `plan.md` checklist. Read the code. These were confirmed by 
 ### A1. Create the static site (agent)
 Create these files. **Do not** put them in `public/`, and do not run `expo export`.
 
-`link-site/.well-known/assetlinks.json`:
+`link-site/client/.well-known/assetlinks.json` (the `client/` folder mirrors an Expo export's `dist/client`; the dry run only lists files under it as hosted assets, verified 2026-11-04):
 ```json
 [
   {
@@ -70,7 +70,7 @@ Create these files. **Do not** put them in `public/`, and do not run `expo expor
 ]
 ```
 
-`link-site/index.html` and `link-site/+not-found.html`: the same small static page, with the title "ShiftLoom", the line "Open this shift in the ShiftLoom app on your Android phone. Don't have the app yet? Ask your ShiftLoom contact for it." and no scripts. People see this page only when the app isn't installed, or on iPhone or desktop. This page is a website, so `src/theme/tokens.js` rules don't apply. Keep inline CSS minimal.
+`link-site/client/index.html` and `link-site/client/+not-found.html`: the same small static page, with the title "ShiftLoom", the line "Open this shift in the ShiftLoom app on your Android phone. Don't have the app yet? Ask your ShiftLoom contact for it." and no scripts. People see this page only when the app isn't installed, or on iPhone or desktop. This page is a website, so `src/theme/tokens.js` rules don't apply. Keep inline CSS minimal.
 
 ### A2. Get the fingerprints
 - **EAS key (user):** run `npx eas-cli@latest credentials -p android`, choose the `preview` profile, and copy `SHA256 Fingerprint`. If no keystore exists yet, the first EAS build creates one, so do step 6 first and return here. Ask the user to paste the value. It is a public fingerprint, not a secret.
@@ -86,7 +86,7 @@ First the agent checks that the dotfolder gets packaged:
 ```bash
 npx eas-cli@latest deploy --export-dir link-site --dry-run
 ```
-Inspect the output tarball with `tar tzf` and confirm `.well-known/assetlinks.json` is inside. Then the user runs:
+Run `tar xzOf deploy.tar.gz assets.json` and confirm `client/.well-known/assetlinks.json` is listed (the tarball holds only manifests, the files upload separately). Delete `deploy.tar.gz` afterwards. Then the user runs:
 ```bash
 npx eas-cli@latest deploy --prod --export-dir link-site --dev-domain shiftloom
 ```

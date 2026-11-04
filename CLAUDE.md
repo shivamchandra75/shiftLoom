@@ -23,6 +23,7 @@ Scripts that exist: `npm start`, `npm run ios`, `npm run android`, `npm run web`
 - **Auth/routing gate:** `app/_layout.tsx` calls `useAuthStore().initialize()` and renders nothing until initialized. `NavigationGuard` redirects: no user → `(auth)/login`; user missing `role`/`firstName` → `(user)/onboarding`; otherwise → `(tabs)`. New top-level routes must be added to `inAppGroup` there or the guard will bounce users away.
 - **Routes:** `(auth)` login/signup, `(user)/onboarding`, `(tabs)` home/`my shifts`/saved/profile, `job/[id]` shift details, `notifications`. Note the tab file name contains a space: `app/(tabs)/my shifts.tsx`.
 - **Env:** Supabase keys come from `.env.local` (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`). There is no `.env.example` yet.
+- **Deep links:** shared links are `https://shiftloom.expo.app/job/<id>`. Android App Links are verified by `link-site/client/.well-known/assetlinks.json` (deployed with `eas deploy --export-dir link-site`). `NavigationGuard` keeps the job through login/onboarding. Role is checked on `app/job/[id].tsx` and by the `user_jobs` insert RLS policy (migration `20261104000000`).
 - `constants/mockJobs.ts` is legacy mock data; real data comes from Supabase.
 
 ## graphify

@@ -102,6 +102,18 @@ export async function fetchJobs(role?: JobRole['role']): Promise<Job[]> {
   return data.map(formatDbJob);
 }
 
+export async function fetchJobById(id: string): Promise<Job | null> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("*, job_roles(*), user_jobs(status)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error?.code === "22P02") return null; // a malformed id in a link isn't a server failure
+  if (error) throw error;
+  return data ? formatDbJob(data) : null;
+}
+
 export async function fetchUserJobs(currentUserId: string): Promise<UserJob[]>{
   const { data, error } = await supabase
     .from("user_jobs")
@@ -143,6 +155,9 @@ export async function applyForJob(jobId: string, userId: string, role: string): 
   if (error) {
     if (error.code === '23505') {
       throw new Error("You have already applied for this shift.");
+    }
+    if (error.code === '42501') {
+      throw new Error("This shift is no longer available for your role.");
     }
     throw error;
   }

@@ -1,10 +1,10 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import '@/src/global.css';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/src/store/useAuthStore';
 import { useFonts } from 'expo-font';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
@@ -24,6 +24,10 @@ function NavigationGuard() {
   const { user } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+  const pathname = usePathname();
+  // Survives the trip through login/onboarding. NavigationGuard stays mounted for that whole time.
+  // shortcut: in memory only, so a link is lost if the app is killed mid-signup. Move to AsyncStorage if that happens.
+  const pendingJobId = useRef<string | null>(null);
 
   useEffect(() => {
     const inAuthGroup = segments[0] === '(auth)';
@@ -31,16 +35,30 @@ function NavigationGuard() {
     const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'job' || segments[0] === 'notifications' || segments[0] === 'documents';
     const inAdminGroup = segments[0] === '(admin)' || segments[0] === 'admin-job' || segments[0] === 'admin-user' || segments[0] === 'notifications';
 
+    const linkedJobId = pathname.match(/^\/job\/([^/]+)$/)?.[1] ?? null;
+    const takePending = () => {
+      const id = pendingJobId.current;
+      pendingJobId.current = null;
+      return id;
+    };
+
     if (!user && !inAuthGroup) {
+      pendingJobId.current = linkedJobId ?? pendingJobId.current;
       router.replace('/(auth)/login');
     } else if (user?.role === 'admin') {
-      if (!inAdminGroup) router.replace('/(admin)');
+      if (!inAdminGroup) {
+        const id = linkedJobId ?? takePending();
+        router.replace(id ? { pathname: '/admin-job/[id]', params: { id } } : '/(admin)');
+      }
     } else if (user && ( !user.role || !user?.firstName ) && !inOnboarding) {
+      pendingJobId.current = linkedJobId ?? pendingJobId.current;
       router.replace('/(user)/onboarding');
     }else if(user && user.role && user.firstName && !inAppGroup){
-      router.replace('/(tabs)')
+      const id = takePending();
+      if (id) router.replace({ pathname: '/job/[id]', params: { id } }, { withAnchor: true });
+      else router.replace('/(tabs)');
     }
-  }, [user, segments]);
+  }, [user, segments, pathname]);
 
   usePushNotifications(user?.id);
 
