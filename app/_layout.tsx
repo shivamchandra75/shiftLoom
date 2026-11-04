@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
+import { Stack, usePathname, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import '@/src/global.css';
@@ -25,11 +25,14 @@ function NavigationGuard() {
   const segments = useSegments();
   const router = useRouter();
   const pathname = usePathname();
+  const navigationState = useRootNavigationState();
   // Survives the trip through login/onboarding. NavigationGuard stays mounted for that whole time.
   // shortcut: in memory only, so a link is lost if the app is killed mid-signup. Move to AsyncStorage if that happens.
   const pendingJobId = useRef<string | null>(null);
 
   useEffect(() => {
+    // On a cold start from a link, segments are empty until the router has read the URL. Redirecting then drops the link.
+    if (!navigationState?.key) return;
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[1] === 'onboarding';
     const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'job' || segments[0] === 'notifications' || segments[0] === 'documents';
@@ -58,7 +61,7 @@ function NavigationGuard() {
       if (id) router.replace({ pathname: '/job/[id]', params: { id } }, { withAnchor: true });
       else router.replace('/(tabs)');
     }
-  }, [user, segments, pathname]);
+  }, [user, segments, pathname, navigationState?.key]);
 
   usePushNotifications(user?.id);
 
