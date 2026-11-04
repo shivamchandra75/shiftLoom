@@ -5,6 +5,7 @@ import 'react-native-reanimated';
 import '@/src/global.css';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useEffect, useRef } from 'react';
+import * as Linking from 'expo-linking';
 import { useAuthStore } from '@/src/store/useAuthStore';
 import { useFonts } from 'expo-font';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
@@ -29,6 +30,28 @@ function NavigationGuard() {
   // Survives the trip through login/onboarding. NavigationGuard stays mounted for that whole time.
   // shortcut: in memory only, so a link is lost if the app is killed mid-signup. Move to AsyncStorage if that happens.
   const pendingJobId = useRef<string | null>(null);
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const userRef = useRef(user);
+  userRef.current = user;
+  const launchLinkChecked = useRef(false);
+
+  // Cold start from a shared link: the router can drop the launch URL or the guard below can redirect past it,
+  // so read the launch URL once ourselves and open the job if the app didn't land there.
+  useEffect(() => {
+    if (!navigationState?.key || launchLinkChecked.current) return;
+    launchLinkChecked.current = true;
+    Linking.getInitialURL().then((url) => {
+      const id = url?.match(/^https?:\/\/[^/]+\/job\/([^/?#]+)/)?.[1];
+      console.log('[deeplink] launch url', url, 'path', pathnameRef.current);
+      const u = userRef.current;
+      if (!id || pathnameRef.current.endsWith(`/${id}`)) return;
+      if (!u) pendingJobId.current = id;
+      else if (u.role === 'admin') router.push({ pathname: '/admin-job/[id]', params: { id } });
+      else if (u.role && u.firstName) router.push({ pathname: '/job/[id]', params: { id } });
+      else pendingJobId.current = id;
+    }).catch(() => {});
+  }, [navigationState?.key, router]);
 
   useEffect(() => {
     // On a cold start from a link, segments are empty until the router has read the URL. Redirecting then drops the link.
